@@ -1,21 +1,19 @@
-"""Recolector local de símbolos científicos. La CNN se añadirá en la siguiente etapa."""
+"""Recolección y consulta local de símbolos científicos para aprender LaTeX."""
 
-import base64
-import binascii
-import io
 import json
+import os
 import re
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
-from PIL import Image, UnidentifiedImageError
 
 from src.catalog import PROJECT_ROOT, load_catalog
 from src.dataset import DatasetStore, DuplicateDrawingError
-from src.preprocessing import EmptyDrawingError, preprocess_image
+from src.image_input import decode_drawing
+from src.prediction import ModelUnavailableError, PredictionService
 
 
-def create_app(data_root=None):
+def create_app(data_root=None, model_root=None):
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
     catalog = load_catalog()
@@ -23,6 +21,11 @@ def create_app(data_root=None):
         Path(data_root) if data_root is not None else PROJECT_ROOT / "data", catalog
     )
     app.extensions["dataset_store"] = store
+    predictor = PredictionService(
+        model_root if model_root is not None else os.environ.get("LATEX_MODEL_DIR", PROJECT_ROOT / "models" / "symbols"),
+        catalog,
+    )
+    app.extensions["prediction_service"] = predictor
 
     @app.get("/")
     def index():
@@ -39,6 +42,7 @@ def create_app(data_root=None):
             export_ready = False
         return render_template(
             "index.html", catalog=catalog, counts=current_counts, export_ready=export_ready,
+            model_status=predictor.status(),
         )
 
     @app.get("/api/counts")
@@ -62,23 +66,9 @@ def create_app(data_root=None):
         input_method = payload.get("input_method", "unknown")
         if input_method not in ("mouse", "touch", "pen", "unknown"):
             return jsonify(error="El método de entrada no es válido."), 400
-        data_url = payload.get("image")
-        prefix = "data:image/png;base64,"
-        if not isinstance(data_url, str) or not data_url.startswith(prefix):
-            return jsonify(error="El dibujo debe enviarse como una imagen PNG."), 400
         try:
-            decoded = base64.b64decode(data_url[len(prefix):], validate=True)
-            if len(decoded) > 1024 * 1024:
-                return jsonify(error="La imagen supera el tamaño permitido."), 400
-            with Image.open(io.BytesIO(decoded)) as image:
-                if image.format != "PNG" or max(image.size) > 1024:
-                    return jsonify(error="Usa un PNG de hasta 1024 píxeles por lado."), 400
-                image.load()
-                preprocess_image(image, size=catalog["image_size"])
-                sample_image = image.copy()
-        except (binascii.Error, UnidentifiedImageError, Image.DecompressionBombError, OSError):
-            return jsonify(error="No se pudo leer el PNG. Vuelve a dibujar el símbolo."), 400
-        except EmptyDrawingError as error:
+            sample_image, _processed = decode_drawing(payload.get("image"), catalog["image_size"])
+        except ValueError as error:
             return jsonify(error=str(error)), 400
         try:
             record = store.save(sample_image, class_id, participant_id, input_method)
@@ -90,6 +80,23 @@ def create_app(data_root=None):
         return jsonify(
             sample_id=record["sample_id"], participant_id=participant_id, counts=store.counts()
         ), 201
+
+    @app.get("/api/model")
+    def model_status():
+        return jsonify(predictor.status())
+
+    @app.post("/predict")
+    def predict():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="Envía el dibujo en formato JSON."), 400
+        try:
+            _image, processed = decode_drawing(payload.get("image"), catalog["image_size"])
+            return jsonify(predictor.predict(processed))
+        except ModelUnavailableError as error:
+            return jsonify(error=str(error)), 503
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
 
     @app.post("/prepare")
     def prepare():
