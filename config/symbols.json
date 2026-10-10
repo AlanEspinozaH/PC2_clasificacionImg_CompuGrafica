@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "image_size": 32,
+  "target_per_class": 500,
+  "symbols": [
+    {
+      "class_index": 0,
+      "id": "alpha",
+      "name": "Alfa minúscula",
+      "unicode": "α",
+      "latex": "\\alpha",
+      "example_latex": "\\alpha > 0",
+      "hasy_symbol_id": 82
+    },
+    {
+      "class_index": 1,
+      "id": "xi",
+      "name": "Xi minúscula",
+      "unicode": "ξ",
+      "latex": "\\xi",
+      "example_latex": "\\xi = 1",
+      "hasy_symbol_id": 166
+    },
+    {
+      "class_index": 2,
+      "id": "infty",
+      "name": "Infinito",
+      "unicode": "∞",
+      "latex": "\\infty",
+      "example_latex": "x \\to \\infty",
+      "hasy_symbol_id": 944
+    },
+    {
+      "class_index": 3,
+      "id": "equiv",
+      "name": "Equivalencia",
+      "unicode": "≡",
+      "latex": "\\equiv",
+      "example_latex": "a \\equiv b",
+      "hasy_symbol_id": 603
+    },
+    {
+      "class_index": 4,
+      "id": "partial",
+      "name": "Símbolo de derivada parcial",
+      "unicode": "∂",
+      "latex": "\\partial",
+      "example_latex": "\\frac{\\partial f}{\\partial x}",
+      "hasy_symbol_id": 182
+    },
+    {
+      "class_index": 5,
+      "id": "in",
+      "name": "Pertenencia",
+      "unicode": "∈",
+      "latex": "\\in",
+      "example_latex": "x \\in A",
+      "hasy_symbol_id": 888
+    }
+  ]
+}

@@ -1,160 +1,119 @@
-import tempfile
-import os
-from flask import Flask, request, redirect, send_file
-from skimage import io
+"""Recolector local de símbolos científicos. La CNN se añadirá en la siguiente etapa."""
+
 import base64
-import glob
-import numpy as np
+import binascii
+import io
+import json
+import re
+from pathlib import Path
 
-app = Flask(__name__)
+from flask import Flask, jsonify, render_template, request, send_file
+from PIL import Image, UnidentifiedImageError
 
-main_html = """
-<html>
-<head></head>
-<script>
-  var mousePressed = false;
-  var lastX, lastY;
-  var ctx;
-
-   function getRndInteger(min, max) {
-    return Math.floor(Math.random() * (max - min) ) + min;
-   }
-
-  function InitThis() {
-      ctx = document.getElementById('myCanvas').getContext("2d");
+from src.catalog import PROJECT_ROOT, load_catalog
+from src.dataset import DatasetStore, DuplicateDrawingError
+from src.preprocessing import EmptyDrawingError, preprocess_image
 
 
-      numero = getRndInteger(0, 10);
-      letra = ["U", "N", "I"];
-      random = Math.floor(Math.random() * letra.length);
-      aleatorio = letra[random];
+def create_app(data_root=None):
+    app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
+    catalog = load_catalog()
+    store = DatasetStore(
+        Path(data_root) if data_root is not None else PROJECT_ROOT / "data", catalog
+    )
+    app.extensions["dataset_store"] = store
 
-      document.getElementById('mensaje').innerHTML  = 'Dibujando un ' + aleatorio;
-      document.getElementById('numero').value = aleatorio;
+    @app.get("/")
+    def index():
+        current_counts = store.counts()
+        try:
+            metadata = json.loads(
+                (store.processed_root / "metadata.json").read_text(encoding="utf-8")
+            )
+            export_ready = (
+                (store.processed_root / "dataset.zip").exists()
+                and metadata["class_counts"] == current_counts
+            )
+        except (OSError, ValueError, KeyError):
+            export_ready = False
+        return render_template(
+            "index.html", catalog=catalog, counts=current_counts, export_ready=export_ready,
+        )
 
-      $('#myCanvas').mousedown(function (e) {
-          mousePressed = true;
-          Draw(e.pageX - $(this).offset().left, e.pageY - $(this).offset().top, false);
-      });
+    @app.get("/api/counts")
+    def counts():
+        return jsonify(counts=store.counts())
 
-      $('#myCanvas').mousemove(function (e) {
-          if (mousePressed) {
-              Draw(e.pageX - $(this).offset().left, e.pageY - $(this).offset().top, true);
-          }
-      });
+    @app.post("/upload")
+    def upload():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="Envía los datos del dibujo en formato JSON."), 400
+        class_id = payload.get("class_id")
+        if not isinstance(class_id, str) or class_id not in store.symbols:
+            return jsonify(error="Selecciona una categoría del catálogo."), 400
+        participant_id = payload.get("participant_id")
+        if not isinstance(participant_id, str):
+            return jsonify(error="Ingresa un código de participante, por ejemplo P01."), 400
+        participant_id = participant_id.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{1,31}", participant_id):
+            return jsonify(error="Usa un código de 2 a 32 letras, números o guiones."), 400
+        input_method = payload.get("input_method", "unknown")
+        if input_method not in ("mouse", "touch", "pen", "unknown"):
+            return jsonify(error="El método de entrada no es válido."), 400
+        data_url = payload.get("image")
+        prefix = "data:image/png;base64,"
+        if not isinstance(data_url, str) or not data_url.startswith(prefix):
+            return jsonify(error="El dibujo debe enviarse como una imagen PNG."), 400
+        try:
+            decoded = base64.b64decode(data_url[len(prefix):], validate=True)
+            if len(decoded) > 1024 * 1024:
+                return jsonify(error="La imagen supera el tamaño permitido."), 400
+            with Image.open(io.BytesIO(decoded)) as image:
+                if image.format != "PNG" or max(image.size) > 1024:
+                    return jsonify(error="Usa un PNG de hasta 1024 píxeles por lado."), 400
+                image.load()
+                preprocess_image(image, size=catalog["image_size"])
+                sample_image = image.copy()
+        except (binascii.Error, UnidentifiedImageError, Image.DecompressionBombError, OSError):
+            return jsonify(error="No se pudo leer el PNG. Vuelve a dibujar el símbolo."), 400
+        except EmptyDrawingError as error:
+            return jsonify(error=str(error)), 400
+        try:
+            record = store.save(sample_image, class_id, participant_id, input_method)
+        except DuplicateDrawingError as error:
+            return jsonify(error=str(error)), 409
+        except OSError:
+            app.logger.exception("No se pudo guardar el dibujo")
+            return jsonify(error="No se pudo guardar el dibujo. Revisa el espacio en disco."), 500
+        return jsonify(
+            sample_id=record["sample_id"], participant_id=participant_id, counts=store.counts()
+        ), 201
 
-      $('#myCanvas').mouseup(function (e) {
-          mousePressed = false;
-      });
-  	    $('#myCanvas').mouseleave(function (e) {
-          mousePressed = false;
-      });
-  }
+    @app.post("/prepare")
+    def prepare():
+        try:
+            metadata = store.export()
+        except (ValueError, OSError, KeyError) as error:
+            return jsonify(error=f"No se pudieron preparar los datos: {error}"), 400
+        return jsonify(metadata=metadata, download_url="/dataset.zip")
 
-  function Draw(x, y, isDown) {
-      if (isDown) {
-          ctx.beginPath();
-          ctx.strokeStyle = 'black';
-          ctx.lineWidth = 11;
-          ctx.lineJoin = "round";
-          ctx.moveTo(lastX, lastY);
-          ctx.lineTo(x, y);
-          ctx.closePath();
-          ctx.stroke();
-      }
-      lastX = x; lastY = y;
-  }
+    @app.get("/dataset.zip")
+    def download_dataset():
+        archive = store.processed_root / "dataset.zip"
+        if not archive.exists():
+            return jsonify(error="Primero prepara los datos desde la aplicación."), 404
+        return send_file(archive, as_attachment=True, download_name="dataset_simbolos.zip")
 
-  function clearArea() {
-      // Use the identity matrix while clearing the canvas
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
+    @app.errorhandler(413)
+    def too_large(_error):
+        return jsonify(error="La imagen supera el tamaño permitido."), 413
 
-  //https://www.askingbox.com/tutorial/send-html5-canvas-as-image-to-server
-  function prepareImg() {
-     var canvas = document.getElementById('myCanvas');
-     document.getElementById('myImage').value = canvas.toDataURL();
-  }
-
-
-
-</script>
-<body onload="InitThis();">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
-    <script type="text/javascript" ></script>
-    <div align="left">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/f/f7/Uni-logo_transparente_granate.png" width="300"/>
-    </div>
-    <div align="center">
-        <h1 id="mensaje">Dibujando...</h1>
-        <canvas id="myCanvas" width="200" height="200" style="border:2px solid black"></canvas>
-        <br/>
-        <br/>
-        <button onclick="javascript:clearArea();return false;">Borrar</button>
-    </div>
-    <div align="center">
-      <form method="post" action="upload" onsubmit="javascript:prepareImg();"  enctype="multipart/form-data">
-      <input id="numero" name="numero" type="hidden" value="">
-      <input id="myImage" name="myImage" type="hidden" value="">
-      <input id="bt_upload" type="submit" value="Enviar">
-      </form>
-    </div>
-</body>
-</html>
-
-"""
-
-@app.route("/")
-def main():
-    return(main_html)
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    try:
-        # check if the post request has the file part
-        img_data = request.form.get('myImage').replace("data:image/png;base64,","")
-        aleatorio = request.form.get('numero')
-        print(aleatorio)
-        with tempfile.NamedTemporaryFile(delete = False, mode = "w+b", suffix='.png', dir=str(aleatorio)) as fh:
-            fh.write(base64.b64decode(img_data))
-        #file = request.files['myImage']
-        print("Image uploaded")
-    except Exception as err:
-        print("Error occurred")
-        print(err)
-
-    return redirect("/", code=302)
+    return app
 
 
-@app.route('/prepare', methods=['GET'])
-def prepare_dataset():
-    images = []
-    d = ["I","N","U"]
-    digits = []
-    for digit in d:
-      filelist = glob.glob('{}/*.png'.format(digit))
-      images_read = io.concatenate_images(io.imread_collection(filelist))
-      images_read = images_read[:, :, :, 3]
-      digits_read = np.array([digit] * images_read.shape[0])
-      images.append(images_read)
-      digits.append(digits_read)
-    images = np.vstack(images)
-    digits = np.concatenate(digits)
-    np.save('X.npy', images)
-    np.save('y.npy', digits)
-    return "OK!"
-
-@app.route('/X.npy', methods=['GET'])
-def download_X():
-    return send_file('./X.npy')
-@app.route('/y.npy', methods=['GET'])
-def download_y():
-    return send_file('./y.npy')
+app = create_app()
 
 if __name__ == "__main__":
-    digits = ['U', 'N', 'I']
-    for d in digits:
-        if not os.path.exists(str(d)):
-            os.mkdir(str(d))
-    app.run()
+    app.run(host="127.0.0.1", port=5000)
