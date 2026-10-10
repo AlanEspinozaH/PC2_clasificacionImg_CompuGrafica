@@ -33,6 +33,8 @@ class PreparedDataset:
     catalog: dict
     fingerprint: str
     excluded_demo: int
+    source_type: str = "app_collection"
+    source_description: str = "dibujos recolectados en la aplicacion"
 
 
 def load_dataset(directory, include_demo=False):
@@ -85,11 +87,14 @@ def load_dataset(directory, include_demo=False):
         X[mask], y[mask].astype(np.int64), participants[mask].astype(str),
         [record for record, keep in zip(records, mask) if keep], catalog,
         digest.hexdigest(), 0 if include_demo else int(demo.sum()),
+        metadata.get("source_type", "app_collection"), metadata.get("source", "dibujos recolectados en la aplicacion"),
     )
 
 
 def split_by_participant(dataset, seed=42, validation_participants=None, test_participants=None):
     """Asigna personas enteras; nunca usa las predicciones para elegir una partición."""
+    if dataset.source_type == "hasyv2":
+        raise ValueError("Los user_id de HASY no identifican personas fiables; usa split_dataset para separar imágenes.")
     groups = sorted(set(dataset.participants.tolist()))
     if len(groups) < 3:
         raise ValueError(
@@ -120,3 +125,22 @@ def split_by_participant(dataset, seed=42, validation_participants=None, test_pa
             raise ValueError(f"La partición {name} no tiene ejemplos de: {names}. Revisa la colección.")
         result[name] = indices
     return result
+
+
+def split_dataset(dataset, seed=42, validation_participants=None, test_participants=None):
+    """Usa autores para capturas propias e imágenes estratificadas para HASY."""
+    if dataset.source_type != "hasyv2":
+        return split_by_participant(dataset, seed, validation_participants, test_participants)
+    if validation_participants is not None or test_participants is not None:
+        raise ValueError("HASY no permite reservar personas por user_id; su evaluación se separa por imágenes.")
+    rng = np.random.default_rng(seed)
+    partitions = {name: [] for name in ("train", "validation", "test")}
+    for class_index in range(len(dataset.catalog["symbols"])):
+        indices = rng.permutation(np.flatnonzero(dataset.y == class_index))
+        if len(indices) < 3:
+            raise ValueError("HASY necesita al menos tres imágenes por clase para formar las tres particiones.")
+        held_out = max(1, round(len(indices) * 0.15))
+        partitions["test"].extend(indices[:held_out])
+        partitions["validation"].extend(indices[held_out:2 * held_out])
+        partitions["train"].extend(indices[2 * held_out:])
+    return {name: np.sort(np.asarray(indices, dtype=np.int64)) for name, indices in partitions.items()}

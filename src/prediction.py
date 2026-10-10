@@ -42,7 +42,7 @@ class PredictionService:
                             or description.get("preprocessing") != PREPROCESSING
                             or catalog_signature(description["catalog"]) != catalog_signature(self.catalog)):
                         raise ValueError("El modelo no coincide con el catálogo o procesamiento actual.")
-                if info.get("purpose") not in ("pilot", "collected_dataset"):
+                if info.get("purpose") not in ("pilot", "collected_dataset", "external_baseline"):
                     raise ValueError("Falta identificar el tipo de experimento del modelo.")
                 model = SymbolCNN(len(self.catalog["symbols"]))
                 model.load_state_dict(checkpoint["state_dict"], strict=True)
@@ -57,8 +57,9 @@ class PredictionService:
     def status(self):
         try:
             self.load()
-            return {"ready": True, "pilot": self.info["purpose"] == "pilot",
-                    "message": "Modelo piloto: comprueba las sugerencias." if self.info["purpose"] == "pilot"
+            preliminary = self.info["purpose"] != "collected_dataset"
+            return {"ready": True, "pilot": preliminary,
+                    "message": "Modelo de prueba: comprueba las sugerencias." if preliminary
                     else "Dibuja uno de los seis símbolos del catálogo para consultar su comando."}
         except ModelUnavailableError as error:
             return {"ready": False, "pilot": False, "message": str(error)}
@@ -79,5 +80,5 @@ class PredictionService:
                                "name": symbol["name"], "unicode": symbol["unicode"],
                                "latex": symbol["latex"], "example_latex": symbol["example_latex"],
                                "score": float(probabilities[index])})
-        return {"candidates": candidates, "pilot": self.info["purpose"] == "pilot",
+        return {"candidates": candidates, "pilot": self.info["purpose"] != "collected_dataset",
                 "message": "Sugerencias entre las seis categorías. Verifica el símbolo antes de copiar el comando."}

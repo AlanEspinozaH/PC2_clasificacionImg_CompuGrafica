@@ -18,7 +18,7 @@ La idea es aprender comandos de **LaTeX de forma interactiva**: el usuario dibuj
 
 El modo **Recolectar ejemplos** solicita el símbolo y guarda la categoría indicada por la persona. El modo **Consultar LaTeX** clasifica sin pedir la categoría y muestra símbolo, nombre, comando, ejemplo de sintaxis y botón para copiar.
 
-**El repositorio no incluye pesos entrenados ni una accuracy demostrada.** Primero hay que reunir y revisar los datos. La consulta permanece deshabilitada hasta que exista un modelo compatible; recolectar funciona sin instalar PyTorch.
+El repositorio incluye un **notebook de referencia ejecutado con HASYv2** y el código para reproducirlo. Los pesos se generan localmente y se excluyen de Git. Las métricas de ese experimento evalúan un subconjunto público de seis clases, no los dibujos hechos con mouse por el equipo. La consulta permanece deshabilitada hasta que exista un modelo compatible; recolectar funciona sin instalar PyTorch.
 
 En esta primera versión se reconocen **símbolos aislados**, no expresiones completas.
 
@@ -76,6 +76,58 @@ Para un **piloto del flujo**, pide a tres personas distintas que dibujen cada ca
 
 **HASYv2** puede complementar los experimentos; confirmen con el profesor si permite sustituir la recolección propia por un conjunto público. Esta exportación utiliza únicamente los dibujos recolectados en la aplicación. No mezcla imágenes de HASY ni las carpetas originales `I/`, `N/` y `U/`.
 
+## Notebook y experimento con HASYv2
+
+La consigna solicita **un notebook con entrenamiento y resultados**, además del código modificado. Se incluye `notebooks/01_entrenamiento_simbolos.ipynb`, que utiliza las mismas funciones y CNN de la aplicación. El experimento público es una referencia inicial; la consigna no aclara expresamente si acepta un dataset público para cubrir la recolección. Mantén documentados los datos que realmente recolectó el equipo.
+
+Ya instaladas las dependencias base, CPU y Matplotlib:
+
+```bash
+python -m pip install -r requirements-notebook.txt
+python -m scripts.run_notebook
+LATEX_MODEL_DIR=models/hasy-notebook python main.py
+```
+
+El notebook descarga el archivo oficial de 34.6 MB y comprueba su checksum publicado. La importación selecciona **800 muestras por clase**, 4800 en total, entre ejemplos válidos y únicos. Valida los IDs HASY contra los comandos del catálogo, conserva los IDs de origen mediante `HASY_<user_id>` y aplica el procesamiento compartido.
+
+Los conteos originales verificados son:
+
+| Clase | Muestras originales HASYv2 |
+|---|---:|
+| alpha | 2601 |
+| xi | 2567 |
+| infty | 2914 |
+| equiv | 2518 |
+| partial | 2413 |
+| in | 2296 |
+
+El archivo descargado queda en `data/external/`; el subconjunto, PNG originales, arrays y procedencia quedan en `data/hasy/`. Se descartan dibujos vacíos, IDs de origen inválidos, duplicados de PNG con fondo normalizado y dibujos idénticos que tienen etiquetas distintas. Tus capturas permanecen en `data/raw/` y no se incorporan automáticamente a este experimento.
+
+También puedes preparar e inspeccionar el subconjunto desde la terminal:
+
+```bash
+python -m scripts.prepare_hasy --per-class 800
+python -m scripts.inspect_dataset --data data/hasy/processed
+```
+
+Si el subconjunto ya existe, no vuelvas a importarlo en el mismo destino; la herramienta lo conserva. El notebook reutiliza un subconjunto compatible y resultados del mismo experimento. Para cambiar los parámetros conserva las versiones anteriores y usa otros directorios de datos/modelos.
+
+En VS Code abre el notebook, selecciona el kernel de `.venv` y ejecuta las celdas en orden. Para entrenar con capturas propias, cambia `SOURCE` a `"own"`; tras completar la meta cambia `PILOT_OWN` a `False` y asigna un nombre de experimento propio. Guarda el notebook con las salidas reales antes de entregar.
+
+**HASY se separa por imágenes estratificadas**, 70/15/15 por clase. El [artículo, sección III](https://arxiv.org/abs/1701.08380) explica que `user_id` no identifica personas fiables: `16925` agrupa contribuciones de Detexify. Se conserva este campo como procedencia y no se presenta como número de autores. Las capturas propias sí se separan por participante con códigos estables. Este protocolo no usa los diez folds oficiales, por lo que sus cifras no se comparan directamente con el benchmark del artículo. El modelo queda marcado como referencia externa, aunque tenga 800 imágenes por clase. Prueba además dibujos nuevos hechos con mouse; una buena cifra en HASY no garantiza ese desempeño.
+
+Resultados del experimento incluido (semilla 42, CPU):
+
+| Medida | Resultado |
+|---|---:|
+| Entrenamiento / validación / prueba | 3360 / 720 / 720 imágenes |
+| Accuracy top-1 | 98.61% (710/720) |
+| Accuracy top-3 | 99.86% (719/720) |
+| F1 macro | 0.9861 |
+| Mejor época / épocas ejecutadas | 7 / 12 |
+
+La confusión más frecuente fue `xi` → `in` (3 imágenes). Top-3 recuperó 9 de los 10 errores de la primera sugerencia. Son resultados de imágenes reservadas de este subconjunto, no una evaluación de dibujantes nuevos ni de las capturas propias.
+
 ## Dónde quedan los datos
 
 | Ruta | Contenido |
@@ -92,7 +144,7 @@ Para un **piloto del flujo**, pide a tres personas distintas que dibujen cada ca
 
 El ZIP contiene los arrays y metadatos; **los PNG originales permanecen en `data/raw/`**. Respalda también esa carpeta para conservar la colección original.
 
-`data/raw/`, `data/processed/`, `models/`, `reports/` y `.venv/` están excluidos de Git. Los compañeros deben compartir los datos y modelos por un medio acordado, manteniendo el catálogo y los metadatos. Un push de código no respalda esas carpetas.
+`data/raw/`, `data/processed/`, `data/external/`, `data/hasy/`, `models/`, `reports/` y `.venv/` están excluidos de Git. Los compañeros deben compartir los datos y modelos por un medio acordado, manteniendo el catálogo y los metadatos. Un push de código no respalda esas carpetas.
 
 ## Inspeccionar y entrenar
 
@@ -156,8 +208,8 @@ Cada experimento guarda:
 | Archivo en el directorio del modelo | Contenido |
 |---|---|
 | `model.pt` | Pesos y contrato de arquitectura, catálogo y procesamiento. |
-| `model_info.json` | Semilla, versiones, número de muestras, propósito piloto/final y huella del dataset. |
-| `split.json` | Personas, índices y IDs de muestras de entrenamiento, validación y prueba. |
+| `model_info.json` | Semilla, versiones, muestras, origen, protocolo de partición y huella del dataset. |
+| `split.json` | Índices, IDs de muestras y códigos de origen/participante de cada partición. |
 | `history.json` / `learning_curves.png` | Pérdida y accuracy por época. |
 | `metrics.json` | Accuracy top-1/top-3, F1 macro y precisión/recall/F1 por clase. |
 | `confusion_matrix.png` | Filas = clase real; columnas = predicción. |
@@ -195,11 +247,15 @@ La exportación admite una colección pequeña para probar el flujo. `complete_c
 | `src/model.py` / `src/training.py` | CNN y entrenamiento. |
 | `src/evaluation.py` | Métricas con orden fijo de clases. |
 | `src/prediction.py` | Carga del modelo y tres candidatos. |
+| `src/hasy_import.py` / `scripts/prepare_hasy.py` | Subconjunto público con IDs de origen y procedencia. |
 | `scripts/inspect_dataset.py` / `scripts/train.py` | Herramientas de consola. |
+| `notebooks/01_entrenamiento_simbolos.ipynb` | Entrenamiento, figuras, métricas e integración. |
+| `scripts/run_notebook.py` | Ejecuta el notebook y guarda sus salidas. |
 | `templates/index.html` | Interfaz de recolección y consulta. |
 | `static/app.js` | Lienzo y envío de dibujos. |
 | `tests/test_collection.py` | Pruebas de captura y preparación. |
 | `tests/test_training.py` | Particiones, métricas, modelos y consulta. |
+| `tests/test_hasy.py` | Integridad, selección e independencia del dataset público. |
 
 Las rutas principales son `GET /` para la interfaz, `POST /upload` para guardar, `POST /prepare` para preparar, `GET /dataset.zip` para descargar, `GET /api/model` para consultar disponibilidad y `POST /predict` para obtener candidatos.
 
@@ -211,7 +267,7 @@ Con el entorno activado:
 python -m unittest discover -s tests -v
 ```
 
-Las pruebas usan directorios temporales: no agregan dibujos a la colección real. Comprueban captura, preprocesamiento, alineación, separación por persona, métricas y correspondencia de comandos. La prueba de entrenamiento utiliza dibujos sintéticos para comprobar el flujo, sin pretender medir reconocimiento real. Las cinco pruebas de CNN se omiten si PyTorch no está instalado.
+Las pruebas usan directorios temporales: no agregan dibujos a la colección real. Comprueban captura, preprocesamiento, alineación, separación por persona, métricas, correspondencia de comandos y procedencia de HASY. Las pruebas unitarias de entrenamiento utilizan dibujos sintéticos para comprobar el flujo, sin pretender medir reconocimiento real. Las pruebas de CNN se omiten si PyTorch no está instalado. El notebook de referencia se ejecuta adicionalmente con las imágenes reales de HASYv2.
 
 ## Trabajo en equipo
 

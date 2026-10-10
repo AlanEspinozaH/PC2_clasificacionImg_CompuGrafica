@@ -1,4 +1,4 @@
-"""Entrena una CNN con participantes separados y guarda el experimento completo."""
+"""Entrena una CNN, separa datos según su origen y guarda el experimento completo."""
 
 import argparse
 
@@ -30,7 +30,7 @@ def main():
         print(f"\nModelo guardado en {args.output}; mejor época: {info['best_epoch']}")
         print(f"Prueba: top-1={metrics['top_1_accuracy']:.3f}, top-3={metrics['top_3_accuracy']:.3f}, "
               f"F1 macro={metrics['macro_f1']:.3f}")
-        if args.pilot:
+        if metrics["preliminary"]:
             print("Ensayo preliminar: estas métricas no acreditan la calidad del modelo final.")
         return 0
     except ImportError:

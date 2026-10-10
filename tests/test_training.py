@@ -210,6 +210,18 @@ class ModelTests(unittest.TestCase):
             train_model(dataset, self.root / "trained")
         self.assertFalse((self.root / "trained").exists())
 
+    def test_external_data_stays_marked_as_a_reference_model(self):
+        from src.training import train_model
+        dataset = load_dataset(make_collection(self.root / "collection"))
+        dataset.source_type = "hasyv2"
+        dataset.source_description = "HASYv2 publico"
+        output = self.root / "reference"
+        info, metrics = train_model(dataset, output, epochs=1, pilot=True, plots=False, threads=1)
+        self.assertEqual(info["purpose"], "external_baseline")
+        self.assertTrue(metrics["preliminary"])
+        client = create_app(self.root / "query-data", output).test_client()
+        self.assertTrue(client.get("/api/model").json["pilot"])
+
 
 if __name__ == "__main__":
     unittest.main()

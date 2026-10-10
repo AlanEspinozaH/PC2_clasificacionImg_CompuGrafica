@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from .evaluation import classification_metrics
 from .model import SymbolCNN
-from .training_data import PREPROCESSING, split_by_participant
+from .training_data import PREPROCESSING, split_dataset
 
 
 def evaluate(model, loader):
@@ -80,7 +80,7 @@ def train_model(dataset, output, epochs=25, batch_size=32, patience=5, seed=42,
             "Falta completar la meta por categoría. Para un ensayo preliminar usa --pilot; "
             "sus métricas no son una evaluación definitiva."
         )
-    partitions = split_by_participant(dataset, seed, validation_participants, test_participants)
+    partitions = split_dataset(dataset, seed, validation_participants, test_participants)
     torch.set_num_threads(min(threads, os.cpu_count() or 1))
     torch.manual_seed(seed)
     torch.use_deterministic_algorithms(True)
@@ -129,7 +129,8 @@ def train_model(dataset, output, epochs=25, batch_size=32, patience=5, seed=42,
     model.load_state_dict(best_state)
     test_loss, y_test, probabilities = evaluate(model, loader("test"))
     metrics = classification_metrics(y_test, probabilities, dataset.catalog)
-    metrics.update(loss=test_loss, preliminary=pilot)
+    is_reference = dataset.source_type != "app_collection"
+    metrics.update(loss=test_loss, preliminary=pilot or is_reference, source_type=dataset.source_type)
     split_info = {
         name: {"indices": indices.tolist(),
                "sample_ids": [dataset.records[i]["sample_id"] for i in indices],
@@ -140,11 +141,16 @@ def train_model(dataset, output, epochs=25, batch_size=32, patience=5, seed=42,
     }
     info = {
         "schema_version": 1, "architecture": SymbolCNN.architecture,
-        "created_at": datetime.now(timezone.utc).isoformat(), "purpose": "pilot" if pilot else "collected_dataset",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "purpose": "external_baseline" if is_reference else ("pilot" if pilot else "collected_dataset"),
+        "source_type": dataset.source_type, "source": dataset.source_description,
         "catalog": dataset.catalog, "preprocessing": PREPROCESSING,
         "dataset_sha256": dataset.fingerprint, "n_samples": len(dataset.y),
         "excluded_demo": dataset.excluded_demo, "class_counts": counts.tolist(),
-        "seed": seed, "best_epoch": best_epoch, "epochs_run": len(history),
+        "seed": seed, "best_epoch": best_epoch, "epochs_run": len(history), "epochs_requested": epochs,
+        "split_protocol": "image_stratified_hasy" if dataset.source_type == "hasyv2" else "participant_holdout",
+        "identity_note": "HASY user_id are unreliable; 16925 aggregates Detexify contributors."
+                         if dataset.source_type == "hasyv2" else "One stable code per actual participant is required.",
         "selection": "minimum validation cross entropy; test evaluated once after selection",
         "augmentation": "none", "device": "cpu", "torch_version": str(torch.__version__),
         "batch_size": batch_size, "patience": patience, "partitions": split_info,
