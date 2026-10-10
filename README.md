@@ -292,3 +292,9 @@ Basado en el repositorio del profesor: [PeterTXS09/letras_uni](https://github.co
 Referencia de datos: [MartinThoma/HASY](https://github.com/MartinThoma/HASY). Los IDs del catálogo corresponden a su `symbols.csv`.
 
 Instalación de CPU y guardado de pesos: [versiones de PyTorch](https://pytorch.org/get-started/previous-versions/) y [guardar/cargar modelos](https://docs.pytorch.org/tutorials/beginner/basics/saveloadrun_tutorial.html).
+
+## Piloto con mouse y plan del equipo
+
+El piloto manual reportado por Alan incluye 30 consultas: top-1 19/30 (63,33 %) y top-3 29/30 (96,67 %). Es una evaluación pequeña de una persona, basada en conteos agregados; no permite calcular F1 ni matriz de confusión. Se añade al notebook como registro manual separado de las métricas HASY.
+
+Consulta [el plan de entrega y responsabilidades para cuatro integrantes](docs/PLAN_EQUIPO_PC2.md) y [los conteos del piloto](docs/mouse_piloto.json). Antes de entregar, confirmar la aceptación del origen de datos y comprobar que la rama enlazada contiene el código adaptado y el notebook. Actualmente main conserva el código base y las PR de integración siguen abiertas.
