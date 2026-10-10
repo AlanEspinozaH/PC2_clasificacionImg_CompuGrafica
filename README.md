@@ -126,7 +126,7 @@ Resultados del experimento incluido (semilla 42, CPU):
 | F1 macro | 0.9861 |
 | Mejor época / épocas ejecutadas | 7 / 12 |
 
-La confusión más frecuente fue `xi` → `in` (3 imágenes). Top-3 recuperó 9 de los 10 errores de la primera sugerencia. Son resultados de imágenes reservadas de este subconjunto, no una evaluación de dibujantes nuevos ni de las capturas propias.
+La confusión más frecuente fue `xi` → `in` (4 imágenes). Top-3 recuperó 9 de los 10 errores de la primera sugerencia. Son resultados de imágenes reservadas de este subconjunto, no una evaluación de dibujantes nuevos ni de las capturas propias.
 
 ## Dónde quedan los datos
 
