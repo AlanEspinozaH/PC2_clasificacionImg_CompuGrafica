@@ -4,6 +4,15 @@ Proyecto académico de la **PC2 de Computación Gráfica (UNI)**.
 
 La idea es aprender comandos de **LaTeX de forma interactiva**: el usuario dibuja una letra griega o un símbolo matemático, y una CNN propone tres coincidencias cuando existe un modelo entrenado. El usuario compara las alternativas y copia el comando correcto.
 
+## Guías para integrantes
+
+- [Instalación y colaboración: Ubuntu 24.04 y Windows 11](docs/INSTALACION.md).
+- [Cómo completar la contribución de Alan](docs/CONTRIBUCION_ALAN.md).
+- [Reparto de exposición: dos diapositivas y 25 % del tiempo por integrante](docs/EXPOSICION.md).
+- [Plan de entrega y cobertura de la rúbrica](docs/PLAN_EQUIPO_PC2.md).
+
+La versión funcional está en `feat/cnn-latex`. Usen esa rama hasta integrar los PR del proyecto en `main`. Para reproducir el entorno se toma Python 3.12 como referencia.
+
 ## Estado actual
 
 **Recolección, entrenamiento en CPU y consulta de tres candidatos implementados.**
@@ -37,12 +46,12 @@ El orden de `config/symbols.json` se comparte entre recolección, entrenamiento 
 
 Los comandos se usan en modo matemático, por ejemplo `\(\alpha\)` o `$x \in A$`.
 
-## Ejecutar en Ubuntu
+## Inicio rápido en Ubuntu
 
-La configuración fijada de dependencias requiere **Python 3.10 a 3.13**. Desde la carpeta del repositorio:
+La guía del equipo usa **Python 3.12** como referencia; consulta [INSTALACION.md](docs/INSTALACION.md) para requisitos previos, Windows, CPU y notebook. Desde la carpeta del repositorio:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python main.py

@@ -56,20 +56,22 @@ Para ampliar la evaluación, registrar antes de cada consulta el símbolo espera
 
 ## 4. Distribución propuesta entre cuatro estudiantes
 
-Todos revisan la rúbrica, comprenden el flujo completo y preparan sus propias diapositivas. La tabla asigna una responsabilidad principal y evidencias verificables, no autoría exclusiva de todo el código existente.
+Todos revisan la rúbrica, comprenden el flujo completo y preparan sus propias diapositivas. El reparto detallado y los límites entre temas están en [EXPOSICION.md](EXPOSICION.md): dos diapositivas y 25 % del tiempo por integrante, incluida la demo. La tabla asigna una responsabilidad principal y evidencias verificables, no autoría exclusiva de todo el código existente.
 
 | Integrante | Responsabilidad principal | Trabajo concreto | Evidencia y exposición |
 |---|---|---|---|
 | **Alan** | Integración, preprocesamiento y demo. | Revisar Flask/lienzo, explicar el procesamiento compartido, reproducir carga del modelo, ordenar la versión de entrega y coordinar revisión de PR. | Flujo del dibujo al LaTeX, ejemplos antes/después del procesamiento, comandos de ejecución, prueba y demo. |
 | **Estudiante 2** | Problema, dataset y calidad de datos. | Resolver con el profesor la aceptación de HASY; revisar conteos, correspondencia de etiquetas, procedencia y duplicados. Coordinar recolección propia si corresponde. | Justificación del tema, catálogo, muestras, cantidades y documento del origen real. |
 | **Estudiante 3** | CNN y notebook. | Comprender las capas, pérdida, Adam, dropout y criterio de selección; revisar el notebook ejecutado y su reproducibilidad. Hacer otro experimento solo si hay una hipótesis concreta. | Arquitectura, celda de entrenamiento, curvas, explicación de época 7 y diferencia entre validación y prueba. |
-| **Estudiante 4** | Evaluación, errores y conclusiones. | Interpretar top-1/top-3/F1/confusión; organizar consultas nuevas de varios integrantes y conservar errores; comparar HASY con el piloto y redactar conclusiones. Coordinar formato Canva con los aportes de todos. | Tabla de métricas, casos de error, limitaciones y conclusiones sustentadas. |
+| **Estudiante 4** | Evaluación, errores y conclusiones. | Interpretar top-1/top-3/F1/confusión; organizar consultas nuevas de varios integrantes y conservar errores; comparar HASY con el piloto y redactar conclusiones. Revisar la coherencia de las conclusiones con los aportes de todos. | Tabla de métricas, casos de error, limitaciones y conclusiones sustentadas. |
 
 Para la revisión cruzada: Alan revisa el flujo de datos con estudiante 2; estudiantes 3 y 4 revisan juntos las particiones, métricas y conclusiones. Cada integrante debe conocer qué datos entrenaron el modelo y qué ejemplos se reservaron.
 
 Una ampliación ligera es que los otros tres integrantes hagan también cinco consultas por clase. Junto al piloto de Alan serían 120 consultas de cuatro personas. Es una evaluación más variada, todavía pequeña, y requiere conservar los resultados por consulta para producir métricas auditables. No se inventan esas consultas ni se cuentan como realizadas antes de recibirlas.
 
 ## 5. Qué debe dominar y entregar Alan
+
+La secuencia de trabajo, evidencia visual y PR están en [CONTRIBUCION_ALAN.md](CONTRIBUCION_ALAN.md). El entrenamiento local ya está versionado: para cerrar esta parte no hace falta repetirlo.
 
 1. **Cambio respecto al código base:** de I/N/U a seis símbolos, catálogo único, recolección con participantes, entrenamiento reproducible y tres comandos LaTeX.
 2. **Flujo de una consulta:** lienzo → PNG → procesamiento → entrada de un canal 32 × 32 → CNN con seis logits → ranking → catálogo y comandos.
@@ -90,7 +92,7 @@ La suite existente tuvo 38 pruebas satisfactorias durante el desarrollo. Para la
 
 ## 6. Guion inicial para adaptar a Canva
 
-Sin duración de exposición indicada, repartir tiempos semejantes y reservar espacio para la demo. Ajustar el número de diapositivas cuando llegue la plantilla.
+El guion detallado de [EXPOSICION.md](EXPOSICION.md) es la referencia para asignar temas y evitar solapamientos. Repartir el tiempo total en cuatro partes iguales; la demo de Alan y las transiciones se incluyen en esos bloques. Cada integrante prepara sus dos diapositivas. Ajustar el formato cuando llegue la plantilla.
 
 | Diapositiva | Contenido | Expositor |
 |---:|---|---|
@@ -106,6 +108,8 @@ Sin duración de exposición indicada, repartir tiempos semejantes y reservar es
 Mostrar fragmentos concretos del código y salidas legibles; evitar recitar archivos enteros. Cada integrante prepara una explicación y una conclusión de su parte. Preguntas de ensayo: ¿por qué tres alternativas?, ¿por qué separar validación y prueba?, ¿por qué no tratar los IDs HASY como personas?, ¿qué se puede concluir de 30 consultas?, ¿qué cambia entre HASY y dibujos propios?, ¿qué ocurre con un símbolo desconocido?
 
 ## 7. Colaboración y cierre
+
+Seguir [INSTALACION.md](INSTALACION.md) para Ubuntu, Windows y el flujo de ramas. La prueba real en Windows debe quedar registrada por un integrante antes de la demo en ese sistema.
 
 Clonar el repositorio del equipo, no crear cuatro proyectos inconexos. Hasta integrar la versión funcional en main, crear ramas cortas desde `origin/feat/cnn-latex` y proponer PR hacia `feat/cnn-latex`. Ejemplos: `docs/flujo-demo`, `docs/datos-procedencia`, `docs/cnn-entrenamiento`, `docs/evaluacion-conclusiones`. Después de la integración, usar `main` como base común. Cada PR debe explicar la evidencia o el comportamiento que aporta; coordinar las ediciones del notebook para evitar sobrescribir salidas de otros.
 
