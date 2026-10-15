@@ -12,6 +12,13 @@ const clearButton = document.getElementById("clear-button");
 const exportButton = document.getElementById("export-button");
 const exportStatus = document.getElementById("export-status");
 const downloadLink = document.getElementById("download-link");
+const predictButton = document.getElementById("predict-button");
+const collectMode = document.getElementById("collect-mode");
+const queryMode = document.getElementById("query-mode");
+const candidates = document.getElementById("candidates");
+const copyStatus = document.getElementById("copy-status");
+let modelStatus = JSON.parse(document.getElementById("model-data").textContent);
+let mode = "collection";
 let busy = false;
 let hasDrawing = false;
 let activePointer = null;
@@ -30,6 +37,9 @@ function updateControls() {
   exportButton.disabled = busy;
   participant.disabled = busy;
   selector.disabled = busy || hasDrawing;
+  predictButton.disabled = busy || !modelStatus.ready;
+  collectMode.disabled = busy;
+  queryMode.disabled = busy;
 }
 
 function showStatus(message, isError = false) {
@@ -85,6 +95,8 @@ function canvasPoint(event) {
 canvas.addEventListener("pointerdown", event => {
   if (busy || activePointer !== null || event.button !== 0) return;
   event.preventDefault();
+  candidates.replaceChildren();
+  copyStatus.textContent = "";
   activePointer = event.pointerId;
   canvas.setPointerCapture(event.pointerId);
   inputMethod = event.pointerType || "unknown";
@@ -129,7 +141,113 @@ canvas.addEventListener("lostpointercapture", stopDrawing);
 selector.addEventListener("change", updatePrompt);
 clearButton.addEventListener("click", () => {
   resetCanvas();
-  showStatus("Lienzo limpio. Dibuja el símbolo indicado.");
+  candidates.replaceChildren();
+  copyStatus.textContent = "";
+  showStatus(mode === "collection" ? "Lienzo limpio. Dibuja el símbolo indicado." : "Lienzo limpio. Dibuja un símbolo del catálogo.");
+});
+
+async function changeMode(nextMode) {
+  if (busy || mode === nextMode) return;
+  // Evita guardar un dibujo de consulta bajo la categoría anterior de recolección.
+  mode = nextMode;
+  resetCanvas();
+  candidates.replaceChildren();
+  copyStatus.textContent = "";
+  document.getElementById("collection-fields").hidden = mode !== "collection";
+  document.getElementById("collection-panel").hidden = mode !== "collection";
+  document.getElementById("query-help").hidden = mode !== "query";
+  document.getElementById("query-panel").hidden = mode !== "query";
+  saveButton.hidden = mode !== "collection";
+  predictButton.hidden = mode !== "query";
+  collectMode.setAttribute("aria-pressed", String(mode === "collection"));
+  queryMode.setAttribute("aria-pressed", String(mode === "query"));
+  document.getElementById("mode-label").textContent = mode === "collection" ? "Modo de recolección" : "Modo de consulta";
+  showStatus(mode === "collection" ? "Dibuja el símbolo indicado para guardar una muestra." : "Dibuja un símbolo y busca su comando.");
+  if (mode === "query") {
+    try {
+      const response = await fetch("/api/model");
+      if (!response.ok) throw new Error("No se pudo consultar el modelo.");
+      modelStatus = await response.json();
+      document.getElementById("model-status").textContent = modelStatus.message;
+    } catch (error) {
+      modelStatus = { ready: false };
+      document.getElementById("model-status").textContent = error.message;
+    }
+  }
+  updateControls();
+}
+collectMode.addEventListener("click", () => changeMode("collection"));
+queryMode.addEventListener("click", () => changeMode("query"));
+
+function displayCandidates(result) {
+  candidates.replaceChildren();
+  for (const candidate of result.candidates) {
+    const card = document.createElement("article");
+    card.className = "candidate";
+    const heading = document.createElement("div");
+    heading.className = "candidate-heading";
+    const glyph = document.createElement("span");
+    glyph.className = "candidate-glyph";
+    glyph.textContent = candidate.unicode;
+    const details = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = candidate.name;
+    const command = document.createElement("code");
+    command.textContent = candidate.latex;
+    details.append(name, command);
+    heading.append(glyph, details);
+    const exampleLabel = document.createElement("p");
+    exampleLabel.className = "help";
+    exampleLabel.textContent = "Ejemplo en modo matemático:";
+    const example = document.createElement("code");
+    example.textContent = candidate.example_latex;
+    const button = document.createElement("button");
+    button.className = "secondary copy-command";
+    button.type = "button";
+    button.textContent = "Copiar " + candidate.latex;
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(candidate.latex);
+        copyStatus.textContent = "Copiado: " + candidate.latex;
+      } catch (_error) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(command);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copyStatus.textContent = "Comando seleccionado. Presiona Ctrl+C para copiarlo.";
+      }
+    });
+    card.append(heading, exampleLabel, example, button);
+    candidates.append(card);
+  }
+}
+
+predictButton.addEventListener("click", async () => {
+  if (!hasDrawing) {
+    showStatus("Dibuja un símbolo antes de consultar.", true);
+    return;
+  }
+  busy = true;
+  updateControls();
+  candidates.replaceChildren();
+  copyStatus.textContent = "";
+  showStatus("Buscando coincidencias...");
+  try {
+    const response = await fetch("/predict", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: canvas.toDataURL("image/png") })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "No se pudo consultar el símbolo.");
+    displayCandidates(result);
+    showStatus(result.message);
+  } catch (error) {
+    showStatus(error.message || "No se pudo conectar con la aplicación.", true);
+  } finally {
+    busy = false;
+    updateControls();
+  }
 });
 
 saveButton.addEventListener("click", async () => {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LaTeX a mano · Recolección</title>
+  <title>LaTeX a mano</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
@@ -14,16 +14,22 @@
       <p class="eyebrow">COMPUTACIÓN GRÁFICA · UNI</p>
       <h1>LaTeX a mano</h1>
     </div>
-    <span class="mode-label">Modo de recolección</span>
+    <span id="mode-label" class="mode-label">Modo de recolección</span>
   </header>
   <main>
-    <p class="intro">Dibuja un símbolo a la vez. Cada muestra ayudará a construir el clasificador.</p>
+    <p class="intro">Dibuja un símbolo a la vez: α, ξ, ∞, ≡, ∂ o ∈.</p>
+    <div class="mode-switch" aria-label="Modo de trabajo">
+      <button id="collect-mode" class="secondary" type="button" aria-pressed="true">Recolectar ejemplos</button>
+      <button id="query-mode" class="secondary" type="button" aria-pressed="false">Consultar LaTeX</button>
+    </div>
+    <p class="help">Cambiar de modo limpia el lienzo.</p>
     <div class="layout">
       <section class="card drawing-card" aria-labelledby="drawing-heading">
         <div class="section-heading">
           <h2 id="drawing-heading">Tu dibujo</h2>
           <span class="small-label">Mouse · lápiz · táctil</span>
         </div>
+        <div id="collection-fields">
         <label for="participant-id">Código de participante</label>
         <input id="participant-id" type="text" placeholder="P01" maxlength="32"
                autocomplete="off" spellcheck="false" aria-describedby="participant-help">
@@ -41,15 +47,18 @@
             <code id="prompt-command"></code>
           </div>
         </div>
+        </div>
+        <p id="query-help" class="help" hidden>Dibuja uno de los seis símbolos sin seleccionar su categoría. El modelo propondrá tres alternativas.</p>
         <canvas id="drawing-canvas" width="200" height="200"
                 aria-label="Lienzo: dibuja con el mouse, un lápiz o la pantalla táctil"></canvas>
         <div class="drawing-actions">
           <button id="clear-button" class="secondary" type="button">Borrar</button>
           <button id="save-button" class="primary" type="button">Guardar dibujo</button>
+          <button id="predict-button" class="primary" type="button" hidden>Buscar comando</button>
         </div>
         <p id="status" class="status" role="status" aria-live="polite">Ingresa tu código y dibuja el símbolo indicado.</p>
       </section>
-      <aside class="card progress-card" aria-labelledby="progress-heading">
+      <aside id="collection-panel" class="card progress-card" aria-labelledby="progress-heading">
         <div class="section-heading">
           <h2 id="progress-heading">Nuestra colección</h2>
           <span id="total-count" class="total-count"></span>
@@ -82,10 +91,19 @@
           <p id="export-status" class="help" role="status" aria-live="polite"></p>
         </div>
       </aside>
+      <aside id="query-panel" class="card" aria-labelledby="query-heading" hidden>
+        <h2 id="query-heading">Posibles coincidencias</h2>
+        <p id="model-status" class="help" role="status">{{ model_status.message }}</p>
+        <p class="help">Compara las tres opciones con tu dibujo. Un símbolo fuera del catálogo puede recibir una sugerencia incorrecta.</p>
+        <div id="candidates" class="candidates"></div>
+        <p id="copy-status" class="help" role="status" aria-live="polite"></p>
+        <p class="help">Usa el comando dentro de modo matemático, por ejemplo <code>\(\alpha\)</code>.</p>
+      </aside>
     </div>
   </main>
   <footer>Proyecto académico · Un símbolo por dibujo · Datos guardados en esta computadora</footer>
   <script id="catalog-data" type="application/json">{{ catalog | tojson }}</script>
   <script id="counts-data" type="application/json">{{ counts | tojson }}</script>
+  <script id="model-data" type="application/json">{{ model_status | tojson }}</script>
 </body>
 </html>
