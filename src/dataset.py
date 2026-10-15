@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import tempfile
 import threading
 import uuid
@@ -24,6 +25,18 @@ FIELDS = [
 EXPORT_FILES = [
     "X.npy", "y.npy", "participants.npy", "labels.json", "manifest.csv", "metadata.json",
 ]
+PARTICIPANT_IDS = ("P01", "P02", "P03", "P04")
+_SAFE_FILENAME_COMPONENT = re.compile(r"[A-Z0-9][A-Z0-9_-]{1,31}")
+
+
+def normalize_participant_id(value):
+    """Devuelve uno de los cuatro códigos canónicos usados en la recolección."""
+    if not isinstance(value, str):
+        raise ValueError("Ingresa un código de participante entre P01 y P04.")
+    match = re.fullmatch(r"P0?([1-4])", value.strip(), flags=re.IGNORECASE)
+    if not match:
+        raise ValueError("Usa uno de los códigos P01, P02, P03 o P04.")
+    return f"P{int(match.group(1)):02d}"
 
 
 class DuplicateDrawingError(ValueError):
@@ -54,32 +67,81 @@ class DatasetStore:
             counts[record["class_id"]] += 1
         return counts
 
+    def _next_correlative(self, records, participant_id, class_id):
+        matching = []
+        for row in records:
+            try:
+                stored_participant = normalize_participant_id(row["participant_id"])
+            except ValueError:
+                stored_participant = row["participant_id"]
+            if stored_participant == participant_id and row["class_id"] == class_id:
+                matching.append(row)
+        prefix = f"{participant_id}_{class_id}_"
+        filename_pattern = re.compile(
+            rf"{re.escape(prefix)}(\d{{4,}})_[0-9a-f]{{8}}\.png",
+            flags=re.IGNORECASE,
+        )
+        highest = len(matching)  # Los registros con nombres UUID heredados también cuentan.
+        filenames = [Path(row["path"]).name for row in matching]
+        category_root = self.raw_root / class_id
+        if category_root.is_dir():
+            filenames.extend(path.name for path in category_root.iterdir() if path.is_file())
+        for filename in filenames:
+            match = filename_pattern.fullmatch(filename)
+            if match:
+                highest = max(highest, int(match.group(1)))
+        return highest + 1
+
     def save(self, image, class_id, participant_id, input_method):
         symbol = self.symbols[class_id]
+        if not isinstance(participant_id, str) or not _SAFE_FILENAME_COMPONENT.fullmatch(
+            participant_id
+        ):
+            raise ValueError("El código de participante no es válido para almacenar archivos.")
         png = io.BytesIO()
         flatten_on_white(image).save(png, format="PNG")
         image_bytes = png.getvalue()
         digest = hashlib.sha256(image_bytes).hexdigest()
-        sample_id = uuid.uuid4().hex
-        relative_path = Path(class_id) / f"{sample_id}.png"
-        record = {
-            "sample_id": sample_id,
-            "path": relative_path.as_posix(),
-            "class_id": class_id,
-            "class_index": symbol["class_index"],
-            "participant_id": participant_id,
-            "input_method": input_method,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "image_sha256": digest,
-        }
         with self.lock:
-            if any(row["image_sha256"] == digest for row in self.records()):
+            records = self.records()
+            if any(row["image_sha256"] == digest for row in records):
                 raise DuplicateDrawingError(
                     "Este dibujo ya fue guardado. Borra el lienzo y dibuja una muestra nueva."
                 )
-            destination = self.raw_root / relative_path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(image_bytes)
+            correlative = self._next_correlative(records, participant_id, class_id)
+            sample_ids = {row["sample_id"] for row in records}
+            category_root = self.raw_root / class_id
+            category_root.mkdir(parents=True, exist_ok=True)
+            for _attempt in range(100):
+                sample_id = uuid.uuid4().hex
+                if sample_id in sample_ids:
+                    continue
+                filename = (
+                    f"{participant_id}_{class_id}_{correlative:04d}_{sample_id[:8]}.png"
+                )
+                relative_path = Path(class_id) / filename
+                destination = self.raw_root / relative_path
+                try:
+                    with destination.open("xb") as stream:
+                        stream.write(image_bytes)
+                except FileExistsError:
+                    continue
+                except OSError:
+                    destination.unlink(missing_ok=True)
+                    raise
+                break
+            else:
+                raise OSError("No se pudo generar un identificador único para la muestra.")
+            record = {
+                "sample_id": sample_id,
+                "path": relative_path.as_posix(),
+                "class_id": class_id,
+                "class_index": symbol["class_index"],
+                "participant_id": participant_id,
+                "input_method": input_method,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "image_sha256": digest,
+            }
             try:
                 new_manifest = not self.manifest.exists()
                 with self.manifest.open("a", newline="", encoding="utf-8") as stream:

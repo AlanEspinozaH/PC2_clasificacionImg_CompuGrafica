@@ -63,25 +63,32 @@ La instalación inicial requiere descargar dependencias; después la recolecció
 
 ## Primera prueba: seis dibujos
 
-1. Usa un código de prueba como **DEMO01**.
+1. Usa el código que te corresponda: **P01**, **P02**, **P03** o **P04**.
 2. Dibuja el símbolo indicado y pulsa **Guardar dibujo**.
 3. Repite hasta guardar una muestra de cada categoría. El lienzo se borra y propone la siguiente categoría después de guardar.
 4. Pulsa **Preparar datos**, después **Descargar colección preparada**.
 5. Comprueba que el ZIP incluya `X.npy`, `y.npy`, `participants.npy` y los metadatos.
 
-Haz esta prueba antes de recolectar cientos de muestras. Los dibujos de prueba permanecen en tus archivos originales y en la exportación; el entrenamiento excluye por defecto los participantes cuyo código comienza por `DEMO`. No elimina archivos.
+Haz esta prueba antes de recolectar cientos de muestras. Los dibujos permanecen en tus archivos originales y en la exportación. Las colecciones antiguas que contengan códigos `DEMO` siguen siendo legibles y el entrenamiento los excluye por defecto; la interfaz nueva solo admite los cuatro códigos asignados. No elimina archivos.
 
 ## Recolección
 
 La meta inicial del catálogo es **500 dibujos por categoría**, 3000 en total. La consigna indica entre 500 y 1000 por categoría. Se puede ajustar la meta antes de iniciar el trabajo.
 
-- Asigna un código distinto a cada persona: `P01`, `P02`, etc.
+- Los cuatro integrantes usan respectivamente `P01`, `P02`, `P03` y `P04`.
+- La interfaz normaliza `p1`, `P1` y `P01` al valor canónico `P01` (y lo mismo para los otros tres códigos); rechaza cualquier código fuera de ese conjunto.
 - El mismo participante debe conservar su código en todos sus dibujos. No introduzcas nombres completos.
 - Guarda dibujos nuevos en lugar de enviar repetidamente el mismo PNG.
 - El dibujo guardado debe corresponder al símbolo solicitado. La revisión humana de las etiquetas sigue siendo necesaria.
 - Recolecta estilos de varias personas para poder evaluar dibujantes nuevos.
 
-Para un **piloto del flujo**, pide a tres personas distintas que dibujen cada categoría diez veces: 3 × 6 × 10 = 180 dibujos. Es un ensayo pequeño, no una muestra suficiente para demostrar calidad. Para la entrega, completa la meta y busca más variedad de participantes, idealmente diez o más. Cada persona debe usar un único código estable; cambiar de código no crea un dibujante independiente.
+Para un **piloto del flujo**, pide a los cuatro integrantes que dibujen cada categoría diez veces: 4 × 6 × 10 = 240 dibujos. Es un ensayo pequeño, no una muestra suficiente para demostrar calidad. Cada persona debe usar siempre su único código estable; cambiar de código no crea un dibujante independiente.
+
+### Nombres de los PNG y compatibilidad
+
+Cada captura nueva se guarda como `data/raw/<categoria>/<participante>_<categoria>_<correlativo:04d>_<uuid8>.png`; por ejemplo, `data/raw/alpha/P01_alpha_0001_a8f32b91.png`. El correlativo es independiente para cada combinación de participante y categoría y se reconstruye al iniciar desde el manifiesto y los archivos existentes. El UUID completo, la ruta y el SHA-256 se conservan en `samples.csv` con las mismas columnas de siempre.
+
+Los PNG antiguos llamados `<uuid>.png` no se renombran, eliminan ni modifican. La exportación abre la ruta registrada en `samples.csv`, por lo que admite conjuntamente nombres antiguos y nuevos. Tanto la exportación como el entrenamiento usan el manifiesto, las etiquetas y los arrays como fuente de verdad; no deducen participantes ni clases desde el nombre del archivo.
 
 **HASYv2** puede complementar los experimentos; confirmen con el profesor si permite sustituir la recolección propia por un conjunto público. Esta exportación utiliza únicamente los dibujos recolectados en la aplicación. No mezcla imágenes de HASY ni las carpetas originales `I/`, `N/` y `U/`.
 
@@ -141,7 +148,7 @@ La confusión más frecuente fue `xi` → `in` (4 imágenes). Top-3 recuperó 9 
 
 | Ruta | Contenido |
 |---|---|
-| `data/raw/<categoria>/<sample_id>.png` | Dibujo original con fondo blanco. |
+| `data/raw/<categoria>/<participante>_<categoria>_<correlativo>_<uuid8>.png` | Dibujo original nuevo con fondo blanco; también se admiten los nombres UUID anteriores. |
 | `data/raw/samples.csv` | Categoría, índice, participante, entrada, fecha UTC y hash del PNG. |
 | `data/processed/X.npy` | Imágenes `float32` con forma `(N, 32, 32, 1)`. |
 | `data/processed/y.npy` | Etiquetas enteras del 0 al 5, alineadas con las imágenes. |
@@ -187,11 +194,11 @@ Para el entrenamiento con la meta completa, omite `--pilot`:
 
 ```bash
 python -m scripts.train --output models/final \
-  --validation-participants P09 --test-participants P10
+  --validation-participants P03 --test-participants P04
 LATEX_MODEL_DIR=models/final python main.py
 ```
 
-Los códigos son un ejemplo: deben existir en tu colección y cada partición debe incluir las seis clases. El resto de personas se usa para entrenamiento. Si omites los códigos de validación y prueba, una asignación aleatoria con semilla 42 separa personas completas, aproximadamente 70/15/15; con pocas personas, las proporciones varían. Conserva los grupos de prueba al comparar experimentos: usa los códigos guardados en `split.json`, aunque añadas participantes.
+Los códigos deben existir en tu colección y cada partición debe incluir las seis clases. En el ejemplo, `P01` y `P02` se usan para entrenamiento. Si omites los códigos de validación y prueba, una asignación aleatoria con semilla 42 separa personas completas; con solo cuatro personas, las proporciones necesariamente son aproximadas. Conserva los grupos de prueba al comparar experimentos: usa los códigos guardados en `split.json`.
 
 El entrenamiento rechaza un directorio de salida que ya exista. Para comparar otro experimento utiliza otro `--output`, conservando el modelo y los resultados anteriores.
 
@@ -276,7 +283,16 @@ Con el entorno activado:
 python -m unittest discover -s tests -v
 ```
 
-Las pruebas usan directorios temporales: no agregan dibujos a la colección real. Comprueban captura, preprocesamiento, alineación, separación por persona, métricas, correspondencia de comandos y procedencia de HASY. Las pruebas unitarias de entrenamiento utilizan dibujos sintéticos para comprobar el flujo, sin pretender medir reconocimiento real. Las pruebas de CNN se omiten si PyTorch no está instalado. El notebook de referencia se ejecuta adicionalmente con las imágenes reales de HASYv2.
+Las pruebas usan directorios temporales: no agregan dibujos a la colección real. Comprueban nombres, normalización de participantes, correlativos por persona y categoría, reinicios, colisiones, nombres UUID heredados, exportación, entrenamiento, preprocesamiento, alineación, métricas, comandos y procedencia de HASY. Las pruebas unitarias de entrenamiento utilizan dibujos sintéticos para comprobar el flujo, sin pretender medir reconocimiento real. Las pruebas de CNN se omiten si PyTorch no está instalado. El notebook de referencia se ejecuta adicionalmente con las imágenes reales de HASYv2.
+
+Después de una captura manual puedes revisar, sin modificar datos:
+
+```bash
+find data/raw -type f -name '*.png' | sort | head
+head -n 3 data/raw/samples.csv
+```
+
+El nombre debe ser legible, mientras `sample_id` en el CSV conserva los 32 caracteres hexadecimales y `image_sha256` conserva el hash completo.
 
 ## Trabajo en equipo
 
