@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-10",
+  "evaluation_type": "manual_mouse_pilot",
+  "source": "Conteos agregados reportados por Alan; no son predicciones individuales exportadas.",
+  "n_participants_reported": 1,
+  "input_method": "mouse",
+  "training_run_reference": "500872b503538b40400133453e69f229a66d6f98",
+  "model_weights_sha256": null,
+  "classes": [
+    {
+      "class_id": "alpha",
+      "symbol": "α",
+      "n": 5,
+      "top_1_correct": 3,
+      "top_3_correct": 5
+    },
+    {
+      "class_id": "xi",
+      "symbol": "ξ",
+      "n": 5,
+      "top_1_correct": 3,
+      "top_3_correct": 4
+    },
+    {
+      "class_id": "infty",
+      "symbol": "∞",
+      "n": 5,
+      "top_1_correct": 3,
+      "top_3_correct": 5
+    },
+    {
+      "class_id": "equiv",
+      "symbol": "≡",
+      "n": 5,
+      "top_1_correct": 3,
+      "top_3_correct": 5
+    },
+    {
+      "class_id": "partial",
+      "symbol": "∂",
+      "n": 5,
+      "top_1_correct": 3,
+      "top_3_correct": 5
+    },
+    {
+      "class_id": "in",
+      "symbol": "∈",
+      "n": 5,
+      "top_1_correct": 4,
+      "top_3_correct": 5
+    }
+  ],
+  "summary": {
+    "n_samples": 30,
+    "top_1_correct": 19,
+    "top_3_correct": 29,
+    "top_1_accuracy": 0.6333333333333333,
+    "top_3_accuracy": 0.9666666666666667,
+    "top_1_errors": 11,
+    "recovered_top_1_errors": 10,
+    "remaining_top_3_errors": 1,
+    "macro_f1": null,
+    "confusion_matrix": null
+  },
+  "limitations": [
+    "Un participante y cinco consultas por clase.",
+    "Sin PNG ni registros individuales de las predicciones.",
+    "No permite calcular precisión, F1 ni matriz de confusión.",
+    "No se verificó el hash de los pesos usados en las consultas.",
+    "Estos conteos no acreditan 500–1000 capturas propias por clase."
+  ]
+}

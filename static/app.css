@@ -27,6 +27,16 @@ h1 { font-size: 26px; margin: 0; letter-spacing: -.025em; }
 }
 main { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
 .intro { margin: 0 0 24px; color: #5a6d64; line-height: 1.55; }
+.mode-switch { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+.mode-switch [aria-pressed="true"] { background: #245746; color: white; }
+.candidates { display: grid; gap: 14px; }
+.candidate { border: 1px solid #dce6df; border-radius: 12px; padding: 16px; }
+.candidate-heading { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.candidate-glyph { font-family: "Cambria Math", Georgia, serif; font-size: 46px; width: 60px; text-align: center; }
+.candidate strong { display: block; font-size: 14px; }
+.candidate code { display: block; margin-top: 7px; overflow-wrap: anywhere; }
+.candidate .help { margin: 10px 0; }
+.copy-command { width: 100%; }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .card { background: white; border: 1px solid #dce6df; border-radius: 18px; padding: 24px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
