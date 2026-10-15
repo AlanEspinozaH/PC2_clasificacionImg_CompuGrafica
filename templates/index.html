@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LaTeX a mano · Recolección</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand-mark" aria-hidden="true">α</div>
+    <div>
+      <p class="eyebrow">COMPUTACIÓN GRÁFICA · UNI</p>
+      <h1>LaTeX a mano</h1>
+    </div>
+    <span class="mode-label">Modo de recolección</span>
+  </header>
+  <main>
+    <p class="intro">Dibuja un símbolo a la vez. Cada muestra ayudará a construir el clasificador.</p>
+    <div class="layout">
+      <section class="card drawing-card" aria-labelledby="drawing-heading">
+        <div class="section-heading">
+          <h2 id="drawing-heading">Tu dibujo</h2>
+          <span class="small-label">Mouse · lápiz · táctil</span>
+        </div>
+        <label for="participant-id">Código de participante</label>
+        <input id="participant-id" type="text" placeholder="P01" maxlength="32"
+               autocomplete="off" spellcheck="false" aria-describedby="participant-help">
+        <p id="participant-help" class="help">Usa el mismo código para todos tus dibujos. Cada persona necesita uno distinto.</p>
+        <label for="symbol-select">Símbolo que vas a dibujar</label>
+        <select id="symbol-select">
+          {% for symbol in catalog.symbols %}
+          <option value="{{ symbol.id }}">{{ symbol.unicode }} — {{ symbol.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="symbol-prompt">
+          <span id="prompt-glyph" class="prompt-glyph" aria-hidden="true"></span>
+          <div>
+            <strong id="prompt-name"></strong>
+            <code id="prompt-command"></code>
+          </div>
+        </div>
+        <canvas id="drawing-canvas" width="200" height="200"
+                aria-label="Lienzo: dibuja con el mouse, un lápiz o la pantalla táctil"></canvas>
+        <div class="drawing-actions">
+          <button id="clear-button" class="secondary" type="button">Borrar</button>
+          <button id="save-button" class="primary" type="button">Guardar dibujo</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite">Ingresa tu código y dibuja el símbolo indicado.</p>
+      </section>
+      <aside class="card progress-card" aria-labelledby="progress-heading">
+        <div class="section-heading">
+          <h2 id="progress-heading">Nuestra colección</h2>
+          <span id="total-count" class="total-count"></span>
+        </div>
+        <p class="help">Meta inicial: {{ catalog.target_per_class }} dibujos distintos por categoría.</p>
+        <div class="category-grid">
+          {% for symbol in catalog.symbols %}
+          <div class="category-tile">
+            <span class="category-glyph" aria-hidden="true">{{ symbol.unicode }}</span>
+            <div class="category-information">
+              <span class="category-name">{{ symbol.name }}</span>
+              <code>{{ symbol.latex }}</code>
+              <span id="count-{{ symbol.id }}" class="category-count"></span>
+              <progress id="progress-{{ symbol.id }}" max="{{ catalog.target_per_class }}" value="0"
+                        aria-label="Progreso de {{ symbol.name }}"></progress>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="collection-tip">
+          <strong>Haz cada dibujo de nuevo.</strong>
+          <p>Varía naturalmente el trazo, el tamaño y la posición. Después de guardar, se propondrá una categoría con menos muestras.</p>
+        </div>
+        <div class="export-area">
+          <h3>Preparar la colección</h3>
+          <p class="help">Exporta las imágenes y sus etiquetas para continuar con el entrenamiento.</p>
+          <button id="export-button" class="secondary full-width" type="button">Preparar datos</button>
+          <a id="download-link" href="/dataset.zip" class="download-link"
+             {% if not export_ready %}hidden{% endif %}>Descargar colección preparada</a>
+          <p id="export-status" class="help" role="status" aria-live="polite"></p>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <footer>Proyecto académico · Un símbolo por dibujo · Datos guardados en esta computadora</footer>
+  <script id="catalog-data" type="application/json">{{ catalog | tojson }}</script>
+  <script id="counts-data" type="application/json">{{ counts | tojson }}</script>
+</body>
+</html>
