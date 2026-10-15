@@ -31,9 +31,9 @@
         </div>
         <div id="collection-fields">
         <label for="participant-id">Código de participante</label>
-        <input id="participant-id" type="text" placeholder="P01" maxlength="32"
+        <input id="participant-id" type="text" placeholder="P01" maxlength="3"
                autocomplete="off" spellcheck="false" aria-describedby="participant-help">
-        <p id="participant-help" class="help">Usa el mismo código para todos tus dibujos. Cada persona necesita uno distinto.</p>
+        <p id="participant-help" class="help">Usa tu código asignado: P01, P02, P03 o P04. Variantes como p1 se normalizan.</p>
         <label for="symbol-select">Símbolo que vas a dibujar</label>
         <select id="symbol-select">
           {% for symbol in catalog.symbols %}

@@ -6,13 +6,17 @@ import io
 import json
 import tempfile
 import unittest
+import uuid
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from main import create_app
+from src.catalog import load_catalog
+from src.dataset import DatasetStore, FIELDS
 from src.preprocessing import EmptyDrawingError, preprocess_image
 
 
@@ -86,6 +90,12 @@ class CollectionTests(unittest.TestCase):
             "input_method": "mouse",
         })
 
+    def records(self):
+        with (self.data_root / "raw" / "samples.csv").open(
+            newline="", encoding="utf-8"
+        ) as stream:
+            return list(csv.DictReader(stream))
+
     def test_capture_records_the_selected_class_and_participant(self):
         response = self.upload("partial", "p02")
         self.assertEqual(response.status_code, 201)
@@ -98,7 +108,84 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(record["class_id"], "partial")
         self.assertEqual(record["class_index"], "4")
         self.assertEqual(record["participant_id"], "P02")
+        self.assertRegex(
+            record["path"], rf"^partial/P02_partial_0001_{record['sample_id'][:8]}\.png$"
+        )
+        self.assertRegex(record["sample_id"], r"^[0-9a-f]{32}$")
+        self.assertRegex(record["image_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(list(record), FIELDS)
         self.assertTrue((self.data_root / "raw" / record["path"]).exists())
+
+    def test_participant_variants_are_normalized_to_the_assigned_code(self):
+        for offset, value in enumerate(("p1", "P1", " P01 ")):
+            with self.subTest(value=value):
+                response = self.upload(participant_id=value, image=drawing(offset * 5))
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(response.json["participant_id"], "P01")
+        self.assertEqual([row["participant_id"] for row in self.records()], ["P01"] * 3)
+
+    def test_correlatives_are_independent_by_participant_and_category(self):
+        cases = [
+            ("alpha", "P01", 0, "P01_alpha_0001_"),
+            ("alpha", "P01", 5, "P01_alpha_0002_"),
+            ("xi", "P01", 10, "P01_xi_0001_"),
+            ("alpha", "P02", 15, "P02_alpha_0001_"),
+        ]
+        for class_id, participant_id, offset, _prefix in cases:
+            self.assertEqual(
+                self.upload(class_id, participant_id, drawing(offset)).status_code, 201
+            )
+        for row, (_class_id, _participant_id, _offset, prefix) in zip(
+            self.records(), cases
+        ):
+            self.assertTrue(Path(row["path"]).name.startswith(prefix))
+
+    def test_correlative_survives_application_restart_and_counts_legacy_names(self):
+        self.assertEqual(self.upload(image=drawing()).status_code, 201)
+        record = self.records()[0]
+        original = self.data_root / "raw" / record["path"]
+        legacy_relative = Path("alpha") / f"{record['sample_id']}.png"
+        legacy = self.data_root / "raw" / legacy_relative
+        original.rename(legacy)
+        record["path"] = legacy_relative.as_posix()
+        record["participant_id"] = "P1"  # Variante que admitía el recolector anterior.
+        with (self.data_root / "raw" / "samples.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as stream:
+            writer = csv.DictWriter(stream, fieldnames=FIELDS)
+            writer.writeheader()
+            writer.writerow(record)
+        legacy_bytes = legacy.read_bytes()
+
+        restarted = create_app(self.data_root)
+        restarted.config["TESTING"] = True
+        self.client = restarted.test_client()
+        self.assertEqual(self.upload(image=drawing(20)).status_code, 201)
+
+        records = self.records()
+        self.assertEqual(records[0]["path"], legacy_relative.as_posix())
+        self.assertEqual(records[0]["participant_id"], "P1")
+        self.assertEqual(records[1]["participant_id"], "P01")
+        self.assertTrue(Path(records[1]["path"]).name.startswith("P01_alpha_0002_"))
+        self.assertEqual(legacy.read_bytes(), legacy_bytes)
+        self.assertEqual(self.client.post("/prepare").status_code, 200)
+
+    def test_existing_destination_is_never_overwritten(self):
+        store = DatasetStore(self.data_root, load_catalog())
+        category = self.data_root / "raw" / "alpha"
+        category.mkdir(parents=True)
+        first_id = uuid.UUID(hex="a" * 32)
+        second_id = uuid.UUID(hex="b" * 32)
+        collision = category / "P01_alpha_0001_aaaaaaaa.png"
+        collision.write_bytes(b"archivo existente")
+        with (
+            patch.object(store, "_next_correlative", return_value=1),
+            patch("src.dataset.uuid.uuid4", side_effect=[first_id, second_id]),
+        ):
+            record = store.save(drawing(), "alpha", "P01", "mouse")
+        self.assertEqual(collision.read_bytes(), b"archivo existente")
+        self.assertEqual(Path(record["path"]).name, "P01_alpha_0001_bbbbbbbb.png")
+        self.assertEqual(record["sample_id"], "b" * 32)
 
     def test_identical_images_do_not_inflate_the_collection(self):
         self.assertEqual(self.upload().status_code, 201)
@@ -111,6 +198,8 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(self.upload("../outside").status_code, 400)
         self.assertEqual(self.upload(participant_id="").status_code, 400)
         self.assertEqual(self.upload(participant_id="../P01").status_code, 400)
+        self.assertEqual(self.upload(participant_id="P05").status_code, 400)
+        self.assertEqual(self.upload(participant_id="DEMO01").status_code, 400)
         self.assertFalse((self.data_root / "raw").exists())
 
     def test_blank_capture_is_rejected(self):

@@ -2,13 +2,12 @@
 
 import json
 import os
-import re
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
 
 from src.catalog import PROJECT_ROOT, load_catalog
-from src.dataset import DatasetStore, DuplicateDrawingError
+from src.dataset import DatasetStore, DuplicateDrawingError, normalize_participant_id
 from src.image_input import decode_drawing
 from src.prediction import ModelUnavailableError, PredictionService
 
@@ -58,11 +57,10 @@ def create_app(data_root=None, model_root=None):
         if not isinstance(class_id, str) or class_id not in store.symbols:
             return jsonify(error="Selecciona una categoría del catálogo."), 400
         participant_id = payload.get("participant_id")
-        if not isinstance(participant_id, str):
-            return jsonify(error="Ingresa un código de participante, por ejemplo P01."), 400
-        participant_id = participant_id.strip().upper()
-        if not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{1,31}", participant_id):
-            return jsonify(error="Usa un código de 2 a 32 letras, números o guiones."), 400
+        try:
+            participant_id = normalize_participant_id(participant_id)
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
         input_method = payload.get("input_method", "unknown")
         if input_method not in ("mouse", "touch", "pen", "unknown"):
             return jsonify(error="El método de entrada no es válido."), 400
