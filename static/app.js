@@ -17,6 +17,16 @@ const collectMode = document.getElementById("collect-mode");
 const queryMode = document.getElementById("query-mode");
 const candidates = document.getElementById("candidates");
 const copyStatus = document.getElementById("copy-status");
+const recognitionResult = document.getElementById("recognition-result");
+const previewToggle = document.getElementById("preview-toggle");
+const processedPreview = document.getElementById("processed-preview");
+const processedPreviewImage = document.getElementById("processed-preview-image");
+const unknownCaptureToggle = document.getElementById("unknown-capture-toggle");
+const unknownCaptureForm = document.getElementById("unknown-capture-form");
+const unknownParticipant = document.getElementById("unknown-participant-id");
+const unknownKind = document.getElementById("unknown-kind");
+const unknownSaveButton = document.getElementById("unknown-save-button");
+const unknownSaveStatus = document.getElementById("unknown-save-status");
 let modelStatus = JSON.parse(document.getElementById("model-data").textContent);
 let mode = "collection";
 let busy = false;
@@ -27,6 +37,7 @@ let inputMethod = "unknown";
 
 try {
   participant.value = localStorage.getItem("latex-participant") || "";
+  unknownParticipant.value = participant.value;
 } catch (_error) {
   // El lienzo también funciona cuando el navegador bloquea el almacenamiento local.
 }
@@ -38,6 +49,11 @@ function updateControls() {
   participant.disabled = busy;
   selector.disabled = busy || hasDrawing;
   predictButton.disabled = busy || !modelStatus.ready;
+  unknownCaptureToggle.disabled = busy;
+  unknownSaveButton.disabled = busy;
+  unknownParticipant.disabled = busy;
+  unknownKind.disabled = busy;
+  previewToggle.disabled = busy;
   collectMode.disabled = busy;
   queryMode.disabled = busy;
 }
@@ -55,6 +71,15 @@ function resetCanvas() {
   lastPoint = null;
   inputMethod = "unknown";
   updateControls();
+}
+
+function clearResult() {
+  candidates.replaceChildren();
+  copyStatus.textContent = "";
+  recognitionResult.textContent = "";
+  recognitionResult.classList.remove("rejected", "recognized");
+  processedPreview.hidden = true;
+  processedPreviewImage.removeAttribute("src");
 }
 
 function updatePrompt() {
@@ -95,8 +120,7 @@ function canvasPoint(event) {
 canvas.addEventListener("pointerdown", event => {
   if (busy || activePointer !== null || event.button !== 0) return;
   event.preventDefault();
-  candidates.replaceChildren();
-  copyStatus.textContent = "";
+  clearResult();
   activePointer = event.pointerId;
   canvas.setPointerCapture(event.pointerId);
   inputMethod = event.pointerType || "unknown";
@@ -141,8 +165,7 @@ canvas.addEventListener("lostpointercapture", stopDrawing);
 selector.addEventListener("change", updatePrompt);
 clearButton.addEventListener("click", () => {
   resetCanvas();
-  candidates.replaceChildren();
-  copyStatus.textContent = "";
+  clearResult();
   showStatus(mode === "collection" ? "Lienzo limpio. Dibuja el símbolo indicado." : "Lienzo limpio. Dibuja un símbolo del catálogo.");
 });
 
@@ -151,8 +174,7 @@ async function changeMode(nextMode) {
   // Evita guardar un dibujo de consulta bajo la categoría anterior de recolección.
   mode = nextMode;
   resetCanvas();
-  candidates.replaceChildren();
-  copyStatus.textContent = "";
+  clearResult();
   document.getElementById("collection-fields").hidden = mode !== "collection";
   document.getElementById("collection-panel").hidden = mode !== "collection";
   document.getElementById("query-help").hidden = mode !== "query";
@@ -179,11 +201,27 @@ async function changeMode(nextMode) {
 collectMode.addEventListener("click", () => changeMode("collection"));
 queryMode.addEventListener("click", () => changeMode("query"));
 
+
 function displayCandidates(result) {
   candidates.replaceChildren();
-  for (const candidate of result.candidates) {
+  if (!result.recognized) {
+    recognitionResult.className = "recognition-result rejected";
+    recognitionResult.textContent = "Sin coincidencia confiable";
+    return;
+  }
+  if (!Array.isArray(result.candidates) || result.candidates.length !== 3) {
+    throw new Error("La respuesta del modelo no contiene las tres puntuaciones esperadas.");
+  }
+  const predictions = result.candidates;
+  recognitionResult.className = "recognition-result recognized";
+  const mainCandidate = result.candidates[0];
+  recognitionResult.textContent =
+    "Símbolo reconocido: " + mainCandidate.unicode + " — " + mainCandidate.name;
+
+  predictions.forEach((candidate, index) => {
+    const isPrincipal = index === 0;
     const card = document.createElement("article");
-    card.className = "candidate";
+    card.className = isPrincipal ? "candidate candidate-principal" : "candidate";
     const heading = document.createElement("div");
     heading.className = "candidate-heading";
     const glyph = document.createElement("span");
@@ -195,16 +233,31 @@ function displayCandidates(result) {
     const command = document.createElement("code");
     command.textContent = candidate.latex;
     details.append(name, command);
+    const example = document.createElement("p");
+    example.className = "candidate-example";
+    example.textContent = "Ejemplo: " + candidate.example_latex;
     heading.append(glyph, details);
-    const exampleLabel = document.createElement("p");
-    exampleLabel.className = "help";
-    exampleLabel.textContent = "Ejemplo en modo matemático:";
-    const example = document.createElement("code");
-    example.textContent = candidate.example_latex;
+
+    const score = candidate.score;
+    if (typeof score !== "number" || !Number.isFinite(score) || score < 0 || score > 1) {
+      throw new Error("La respuesta del modelo contiene una puntuación inválida.");
+    }
+    const scoreLabel = document.createElement("p");
+    scoreLabel.className = "prediction-confidence";
+    scoreLabel.textContent =
+      (isPrincipal ? "Puntuación del modelo (Softmax): " : "Puntuación Softmax: ") +
+      (score * 100).toFixed(1) + "%";
+    const bar = document.createElement("progress");
+    bar.className = "prediction-bar";
+    bar.max = 1;
+    bar.value = score;
+    bar.setAttribute("aria-label", "Puntuación Softmax de " + candidate.name);
+
     const button = document.createElement("button");
     button.className = "secondary copy-command";
     button.type = "button";
     button.textContent = "Copiar " + candidate.latex;
+
     button.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(candidate.latex);
@@ -215,13 +268,15 @@ function displayCandidates(result) {
         range.selectNodeContents(command);
         selection.removeAllRanges();
         selection.addRange(range);
-        copyStatus.textContent = "Comando seleccionado. Presiona Ctrl+C para copiarlo.";
+        copyStatus.textContent =
+          "Comando seleccionado. Presiona Ctrl+C para copiarlo.";
       }
     });
-    card.append(heading, exampleLabel, example, button);
+    card.append(heading, example, scoreLabel, bar, button);
     candidates.append(card);
-  }
+  });
 }
+
 
 predictButton.addEventListener("click", async () => {
   if (!hasDrawing) {
@@ -230,20 +285,73 @@ predictButton.addEventListener("click", async () => {
   }
   busy = true;
   updateControls();
-  candidates.replaceChildren();
-  copyStatus.textContent = "";
+  clearResult();
   showStatus("Buscando coincidencias...");
   try {
     const response = await fetch("/predict", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: canvas.toDataURL("image/png") })
+      body: JSON.stringify({
+        image: canvas.toDataURL("image/png"),
+        include_preview: previewToggle.checked
+      })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "No se pudo consultar el símbolo.");
     displayCandidates(result);
+    if (result.processed_preview) {
+      processedPreviewImage.src = result.processed_preview;
+      processedPreview.hidden = false;
+    }
     showStatus(result.message);
   } catch (error) {
     showStatus(error.message || "No se pudo conectar con la aplicación.", true);
+  } finally {
+    busy = false;
+    updateControls();
+  }
+});
+
+unknownCaptureToggle.addEventListener("click", () => {
+  unknownCaptureForm.hidden = !unknownCaptureForm.hidden;
+  unknownSaveStatus.textContent = "";
+  if (!unknownCaptureForm.hidden && !unknownParticipant.value) {
+    unknownParticipant.value = participant.value;
+  }
+});
+
+unknownSaveButton.addEventListener("click", async () => {
+  if (!hasDrawing) {
+    unknownSaveStatus.textContent = "Dibuja el símbolo desconocido antes de guardarlo.";
+    return;
+  }
+  busy = true;
+  updateControls();
+  unknownSaveStatus.textContent = "Guardando muestra separada...";
+  try {
+    const response = await fetch("/unknown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image: canvas.toDataURL("image/png"),
+        unknown_kind: unknownKind.value,
+        participant_id: unknownParticipant.value.trim(),
+        input_method: inputMethod
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "No se pudo guardar la muestra.");
+    unknownParticipant.value = result.participant_id;
+    participant.value = result.participant_id;
+    try {
+      localStorage.setItem("latex-participant", result.participant_id);
+    } catch (_error) {}
+    const total = Object.values(result.counts).reduce((sum, count) => sum + count, 0);
+    unknownSaveStatus.textContent =
+      "Muestra guardada fuera de las seis clases. Total desconocido: " + total + ".";
+    resetCanvas();
+    clearResult();
+  } catch (error) {
+    unknownSaveStatus.textContent = error.message || "No se pudo conectar con la aplicación.";
   } finally {
     busy = false;
     updateControls();
@@ -279,6 +387,7 @@ saveButton.addEventListener("click", async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "No se pudo guardar el dibujo.");
     participant.value = result.participant_id;
+    unknownParticipant.value = result.participant_id;
     try {
       localStorage.setItem("latex-participant", participant.value);
     } catch (_error) {}

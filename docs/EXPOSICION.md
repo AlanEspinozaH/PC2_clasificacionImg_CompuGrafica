@@ -44,6 +44,7 @@ Estos enlaces no requieren otra diapositiva ni un resumen del bloque anterior. A
 - **Alan:** comparación visual real, entrada `32 × 32 × 1`, procesamiento compartido y consulta que devuelve tres comandos sin guardar un dato de entrenamiento.
 - **Estudiante 3:** partición HASY de 3360/720/720, semilla 42, 12 épocas ejecutadas y selección de época 7 por menor pérdida de validación. Los IDs de HASY no garantizan identidad de persona; si cambia el origen, documenta el protocolo correspondiente.
 - **Estudiante 4:** HASY top-1 98,61 %, top-3 99,86 % y F1 macro 0,9861. Piloto de Alan: 19/30 top-1 y 29/30 top-3. Aclara que son conjuntos y procedimientos distintos; 30 consultas agregadas no permiten una nueva matriz de confusión ni F1 del mouse.
+- **Rechazo OOD, si ya se ejecutó:** usa `data/rejection-evaluation-*/metrics.json` y sus gráficos. Expón cantidades, participantes, método y separación validación/prueba; no ajustes con la prueba ni presentes una métrica hasta que exista el artefacto real. Consulta [el protocolo de rechazo](RECHAZO_DESCONOCIDOS.md).
 
 Esos son los resultados ya disponibles, no promesas de resultados futuros. Cualquier experimento nuevo debe identificar su propia versión. La presentación no debe dar a entender que la herramienta reconoce símbolos fuera del catálogo o que las puntuaciones son certeza calibrada.
 

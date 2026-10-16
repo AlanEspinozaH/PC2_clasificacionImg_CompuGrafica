@@ -97,3 +97,58 @@ footer { padding: 22px 24px 32px; text-align: center; color: #64776a; font-size:
   main, .page-header { padding-left: 14px; padding-right: 14px; }
   .category-grid { grid-template-columns: 1fr; }
 }
+
+/* Resultado principal de reconocimiento */
+
+.candidate-principal {
+    border: 2px solid #25765d;
+    background-color: #edf7f1;
+    border-radius: 14px;
+    padding: 20px;
+}
+
+.candidate-principal .candidate-glyph {
+    font-size: 3.5rem;
+}
+
+.prediction-label {
+    color: #21654f;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+.prediction-confidence {
+    margin: 8px 0 4px;
+    font-size: 0.85rem;
+    color: #346d57;
+}
+
+.candidate { display: grid; gap: 8px; }
+.candidate-example { margin: 0; color: #5a6d64; font-size: 13px; }
+.prediction-bar { width: 100%; height: 10px; margin: 0; accent-color: #35745a; }
+.candidate-principal { border-color: #25765d; }
+.recognition-result { margin: 18px 0; font-size: 1.05rem; font-weight: 700; }
+.recognition-result.recognized { color: #21654f; }
+.recognition-result.rejected { color: #8b3e37; }
+.preview-option { display: flex; align-items: center; gap: 8px; margin: 14px 0; }
+.preview-option input { width: auto; min-height: auto; }
+.processed-preview {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 12px 0 20px;
+    color: #5a6d64;
+    font-size: 13px;
+}
+.processed-preview img {
+    width: 128px;
+    height: 128px;
+    border: 1px solid #cedcd2;
+    image-rendering: pixelated;
+}
+.unknown-capture { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e1e9e3; }
+#unknown-capture-form { padding-top: 16px; }
+#unknown-capture-form label { margin-top: 12px; }
+#unknown-save-button { margin-top: 14px; }

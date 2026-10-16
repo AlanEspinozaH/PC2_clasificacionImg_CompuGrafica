@@ -1,15 +1,24 @@
 """Recolección y consulta local de símbolos científicos para aprender LaTeX."""
 
+import base64
+import io
 import json
 import os
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
+import numpy as np
+from PIL import Image
 
 from src.catalog import PROJECT_ROOT, load_catalog
 from src.dataset import DatasetStore, DuplicateDrawingError, normalize_participant_id
 from src.image_input import decode_drawing
 from src.prediction import ModelUnavailableError, PredictionService
+from src.unknown_data import (
+    DuplicateUnknownDrawingError,
+    UNKNOWN_KINDS,
+    UnknownDrawingStore,
+)
 
 
 def create_app(data_root=None, model_root=None):
@@ -20,6 +29,8 @@ def create_app(data_root=None, model_root=None):
         Path(data_root) if data_root is not None else PROJECT_ROOT / "data", catalog
     )
     app.extensions["dataset_store"] = store
+    unknown_store = UnknownDrawingStore(store.data_root)
+    app.extensions["unknown_drawing_store"] = unknown_store
     predictor = PredictionService(
         model_root if model_root is not None else os.environ.get("LATEX_MODEL_DIR", PROJECT_ROOT / "models" / "symbols"),
         catalog,
@@ -88,13 +99,61 @@ def create_app(data_root=None, model_root=None):
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             return jsonify(error="Envía el dibujo en formato JSON."), 400
+        include_preview = payload.get("include_preview", False)
+        if not isinstance(include_preview, bool):
+            return jsonify(error="La opción de vista previa debe ser booleana."), 400
         try:
             _image, processed = decode_drawing(payload.get("image"), catalog["image_size"])
-            return jsonify(predictor.predict(processed))
+            result = predictor.predict(processed)
+            if include_preview:
+                pixels = np.rint((1.0 - np.clip(processed[..., 0], 0, 1)) * 255).astype(np.uint8)
+                preview = Image.fromarray(pixels).resize(
+                    (256, 256), resample=Image.Resampling.NEAREST
+                )
+                stream = io.BytesIO()
+                preview.save(stream, format="PNG")
+                result["processed_preview"] = (
+                    "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode("ascii")
+                )
+            return jsonify(result)
         except ModelUnavailableError as error:
             return jsonify(error=str(error)), 503
         except ValueError as error:
             return jsonify(error=str(error)), 400
+
+    @app.post("/unknown")
+    def save_unknown():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="Envía los datos del dibujo en formato JSON."), 400
+        kind = payload.get("unknown_kind")
+        if not isinstance(kind, str) or kind not in UNKNOWN_KINDS:
+            return jsonify(error="Selecciona una categoría de dibujo desconocido válida."), 400
+        try:
+            participant_id = normalize_participant_id(payload.get("participant_id"))
+            sample_image, _processed = decode_drawing(payload.get("image"), catalog["image_size"])
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+        try:
+            record = unknown_store.save(
+                sample_image, kind, participant_id, payload.get("input_method", "unknown")
+            )
+        except DuplicateUnknownDrawingError as error:
+            return jsonify(error=str(error)), 409
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+        except OSError:
+            app.logger.exception("No se pudo guardar el dibujo desconocido")
+            return jsonify(error="No se pudo guardar el dibujo. Revisa el espacio en disco."), 500
+        return jsonify(
+            sample_id=record["sample_id"],
+            participant_id=record["participant_id"],
+            counts=unknown_store.counts(),
+        ), 201
+
+    @app.get("/api/unknown-counts")
+    def unknown_counts():
+        return jsonify(counts=unknown_store.counts())
 
     @app.post("/prepare")
     def prepare():

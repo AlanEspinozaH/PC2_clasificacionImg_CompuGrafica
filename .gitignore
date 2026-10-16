@@ -6,6 +6,7 @@ __pycache__/
 .env
 
 data/raw/
+data/unknown/
 data/processed/
 data/external/
 data/hasy/

@@ -48,7 +48,7 @@
           </div>
         </div>
         </div>
-        <p id="query-help" class="help" hidden>Dibuja uno de los seis símbolos sin seleccionar su categoría. El modelo propondrá tres alternativas.</p>
+        <p id="query-help" class="help" hidden>Dibuja uno de los seis símbolos sin seleccionar su categoría.</p>
         <canvas id="drawing-canvas" width="200" height="200"
                 aria-label="Lienzo: dibuja con el mouse, un lápiz o la pantalla táctil"></canvas>
         <div class="drawing-actions">
@@ -92,12 +92,44 @@
         </div>
       </aside>
       <aside id="query-panel" class="card" aria-labelledby="query-heading" hidden>
-        <h2 id="query-heading">Posibles coincidencias</h2>
+        <h2 id="query-heading">Resultado de la consulta</h2>
         <p id="model-status" class="help" role="status">{{ model_status.message }}</p>
-        <p class="help">Compara las tres opciones con tu dibujo. Un símbolo fuera del catálogo puede recibir una sugerencia incorrecta.</p>
+        <p class="help">Las puntuaciones Softmax describen la distribución que produce la CNN; no son una probabilidad calibrada de que la respuesta sea correcta.</p>
+        <label class="preview-option">
+          <input id="preview-toggle" type="checkbox">
+          Mostrar la imagen preparada para la CNN
+        </label>
+        <figure id="processed-preview" class="processed-preview" hidden>
+          <figcaption>Preprocesamiento 32 × 32, ampliado para visualizar</figcaption>
+          <img id="processed-preview-image" alt="Imagen procesada que recibe la CNN">
+        </figure>
+        <p id="recognition-result" class="recognition-result" aria-live="polite"></p>
         <div id="candidates" class="candidates"></div>
         <p id="copy-status" class="help" role="status" aria-live="polite"></p>
         <p class="help">Usa el comando dentro de modo matemático, por ejemplo <code>\(\alpha\)</code>.</p>
+        <section class="unknown-capture" aria-labelledby="unknown-heading">
+          <button id="unknown-capture-toggle" class="secondary full-width" type="button">
+            Registrar un dibujo desconocido para evaluación
+          </button>
+          <div id="unknown-capture-form" hidden>
+            <h3 id="unknown-heading">Muestra desconocida</h3>
+            <p class="help">Guarda una etiqueta de referencia aparte; no se incorpora a las seis clases ni al entrenamiento conocido.</p>
+            <label for="unknown-participant-id">Código de participante</label>
+            <input id="unknown-participant-id" type="text" placeholder="P01" maxlength="3"
+                   autocomplete="off" spellcheck="false">
+            <label for="unknown-kind">Qué se dibujó</label>
+            <select id="unknown-kind">
+              <option value="integral">∫ — Integral</option>
+              <option value="sqrt">√ — Raíz cuadrada</option>
+              <option value="plus">+ — Signo más</option>
+              <option value="pi">π — Pi</option>
+              <option value="random">Garabato aleatorio</option>
+              <option value="other">Otro dibujo desconocido</option>
+            </select>
+            <button id="unknown-save-button" class="secondary full-width" type="button">Guardar aparte</button>
+            <p id="unknown-save-status" class="help" role="status" aria-live="polite"></p>
+          </div>
+        </section>
       </aside>
     </div>
   </main>

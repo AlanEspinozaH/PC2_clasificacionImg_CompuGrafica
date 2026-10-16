@@ -9,13 +9,14 @@ La idea es aprender comandos de **LaTeX de forma interactiva**: el usuario dibuj
 - [Instalación y colaboración: Ubuntu 24.04 y Windows 11](docs/INSTALACION.md).
 - [Cómo completar la contribución de Alan](docs/CONTRIBUCION_ALAN.md).
 - [Reparto de exposición: dos diapositivas y 25 % del tiempo por integrante](docs/EXPOSICION.md).
+- [Recolección y evaluación de dibujos desconocidos](docs/RECHAZO_DESCONOCIDOS.md).
 - [Plan de entrega y cobertura de la rúbrica](docs/PLAN_EQUIPO_PC2.md).
 
 La versión funcional está en `feat/cnn-latex`. Usen esa rama hasta integrar los PR del proyecto en `main`. Para reproducir el entorno se toma Python 3.12 como referencia.
 
 ## Estado actual
 
-**Recolección, entrenamiento en CPU y consulta de tres candidatos implementados.**
+**Recolección, entrenamiento en CPU y consulta de la CNN implementados.** El rechazo de dibujos fuera del catálogo es preliminar hasta calibrarlo y evaluarlo con ejemplos desconocidos separados.
 
 - Lienzo para mouse, lápiz y pantalla táctil, sin recursos externos de internet.
 - Seis categorías definidas en un catálogo común.
@@ -25,7 +26,9 @@ La versión funcional está en `feat/cnn-latex`. Usen esa rama hasta integrar lo
 - Rechazo de lienzos vacíos, categorías inválidas y PNG exactamente repetidos.
 - Exportación de imágenes centradas de 32 × 32, etiquetas y participantes.
 
-El modo **Recolectar ejemplos** solicita el símbolo y guarda la categoría indicada por la persona. El modo **Consultar LaTeX** clasifica sin pedir la categoría y muestra símbolo, nombre, comando, ejemplo de sintaxis y botón para copiar.
+El modo **Recolectar ejemplos** solicita el símbolo y guarda la categoría indicada por la persona. El modo **Consultar LaTeX** clasifica sin pedir la categoría, muestra las puntuaciones de las tres clases principales cuando acepta la entrada y permite copiar los comandos. Softmax no es una probabilidad calibrada de acierto; un rechazo no muestra alternativas como reconocimientos.
+
+Los dibujos etiquetados como externos al catálogo se pueden recopilar aparte en `data/unknown/`. El procedimiento para compararlos con el rechazo Softmax y calibrar energía exclusivamente con validación está en [RECHAZO_DESCONOCIDOS.md](docs/RECHAZO_DESCONOCIDOS.md). Sin conjuntos desconocidos separados para validación y prueba, no se deben presentar tasas de rechazo ni afirmar que la estrategia mejoró.
 
 El repositorio incluye un **notebook de referencia ejecutado con HASYv2** y el código para reproducirlo. Los pesos se generan localmente y se excluyen de Git. Las métricas de ese experimento evalúan un subconjunto público de seis clases, no los dibujos hechos con mouse por el equipo. La consulta permanece deshabilitada hasta que exista un modelo compatible; recolectar funciona sin instalar PyTorch.
 

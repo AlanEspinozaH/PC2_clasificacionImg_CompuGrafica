@@ -2,6 +2,7 @@
 
 import base64
 import csv
+import hashlib
 import importlib.util
 import io
 import json
@@ -149,14 +150,16 @@ class ModelTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def write_known_model(self):
+    def write_known_model(self, biases=None):
         import torch
         from src.model import SymbolCNN
         model = SymbolCNN()
         with torch.no_grad():
             for parameter in model.parameters():
                 parameter.zero_()
-            model.classifier[-1].bias.copy_(torch.arange(6, dtype=torch.float32))
+            if biases is None:
+                biases = [0, 1, 2, 5, 6, 12]
+            model.classifier[-1].bias.copy_(torch.tensor(biases, dtype=torch.float32))
         description = {"schema_version": 1, "architecture": SymbolCNN.architecture,
                        "catalog": self.catalog, "preprocessing": PREPROCESSING}
         torch.save(dict(description, state_dict=model.state_dict()), self.model_root / "model.pt")
@@ -169,8 +172,53 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["class_id"] for item in response.json["candidates"]], ["in", "partial", "equiv"])
         self.assertEqual([item["latex"] for item in response.json["candidates"]], ["\\in", "\\partial", "\\equiv"])
+        self.assertTrue(response.json["recognized"])
+        self.assertEqual(response.json["candidates"][0]["score"], response.json["score"])
+        self.assertTrue(all(0 <= item["score"] <= 1 for item in response.json["candidates"]))
+        self.assertEqual(response.json["calibration_status"], "uncalibrated")
         self.assertTrue(response.json["pilot"])
         self.assertEqual(sum(client.get("/api/counts").json["counts"].values()), 0)
+
+    def test_low_softmax_score_is_rejected_without_candidates(self):
+        self.write_known_model([0, 0, 0, 0, 0, 0])
+        client = create_app(self.root / "data", self.model_root).test_client()
+        response = client.post("/predict", json=png_payload())
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json["recognized"])
+        self.assertEqual(response.json["candidates"], [])
+        self.assertIn("Sin coincidencia confiable", response.json["message"])
+
+    def test_calibrated_energy_policy_controls_rejection_and_preview_is_optional(self):
+        self.write_known_model()
+        checkpoint = self.model_root / "model.pt"
+        policy = {
+            "schema_version": 1,
+            "method": "energy",
+            "energy_threshold": -100.0,
+            "model_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+        }
+        (self.model_root / "rejection_calibration.json").write_text(json.dumps(policy))
+        client = create_app(self.root / "data", self.model_root).test_client()
+        response = client.post("/predict", json=dict(png_payload(), include_preview=True))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json["recognized"])
+        self.assertEqual(response.json["rejection_method"], "energy")
+        self.assertEqual(response.json["calibration_status"], "calibrated")
+        self.assertEqual(response.json["candidates"], [])
+        self.assertTrue(response.json["processed_preview"].startswith("data:image/png;base64,"))
+
+    def test_stale_energy_policy_makes_model_unavailable(self):
+        self.write_known_model()
+        policy = {
+            "schema_version": 1,
+            "method": "energy",
+            "energy_threshold": 0.0,
+            "model_sha256": "not-this-checkpoint",
+        }
+        (self.model_root / "rejection_calibration.json").write_text(json.dumps(policy))
+        client = create_app(self.root / "data", self.model_root).test_client()
+        self.assertFalse(client.get("/api/model").json["ready"])
+        self.assertEqual(client.post("/predict", json=png_payload()).status_code, 503)
 
     def test_catalog_mismatch_blocks_prediction(self):
         self.catalog["symbols"][0]["latex"] = "\\xi"
@@ -201,7 +249,12 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(len(list(csv.DictReader(stream))), 6)
         client = create_app(self.root / "query-data", output).test_client()
         self.assertTrue(client.get("/api/model").json["ready"])
-        self.assertEqual(len(client.post("/predict", json=png_payload()).json["candidates"]), 3)
+        response = client.post("/predict", json=png_payload())
+        self.assertEqual(response.status_code, 200)
+        if response.json["recognized"]:
+            self.assertEqual(len(response.json["candidates"]), 3)
+        else:
+            self.assertEqual(response.json["candidates"], [])
 
     def test_final_training_requires_the_collection_target(self):
         from src.training import train_model

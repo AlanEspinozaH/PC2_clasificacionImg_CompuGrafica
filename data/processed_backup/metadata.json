@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-10-16T05:27:38.733912+00:00",
+  "n_samples": 756,
+  "n_participants": 1,
+  "class_counts": {
+    "alpha": 126,
+    "xi": 126,
+    "infty": 126,
+    "equiv": 126,
+    "partial": 126,
+    "in": 126
+  },
+  "X_shape": [
+    756,
+    32,
+    32,
+    1
+  ],
+  "y_shape": [
+    756
+  ],
+  "preprocessing": {
+    "version": 1,
+    "image_size": 32,
+    "padding": 4,
+    "background": 0,
+    "ink": 1,
+    "dtype": "float32",
+    "pixel_range": [
+      0,
+      1
+    ]
+  },
+  "target_per_class": 500,
+  "complete_collection": false,
+  "source": "dibujos recolectados en la aplicacion"
+}
